@@ -1,0 +1,2 @@
+checkpoints/medsiglip_final_backup.pth !text !filter !merge !diff
+checkpoints/medsiglip_final.pth !text !filter !merge !diff
