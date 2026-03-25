@@ -1,27 +1,31 @@
-"""
-Funcție pentru reproducibility — setează seed-uri pentru toate librăriile.
-"""
-
 import random
 import numpy as np
 import torch
 
+# ═════════════════════════════════════════════════════════════════════════════
+# GLOBAL SEED — schimbă DOAR aici, se propagă peste tot
+# ═════════════════════════════════════════════════════════════════════════════
+SEED = 42
 
-def set_seed(seed=42):
+
+def set_seed(seed=None):
     """
-    Setează seed pentru reproducibilitate.
+    :param seed: valoarea pentru seed; daca e none, folosim constanta globala
+    :return: nimic (setam doar seed-urile intern)
 
-    Args:
-        seed: Seed value (default 42)
+    cuda foloseste gpu-ul pentru calcul paralel masiv; setam modul determinist pentru a evita
+    variatiile minuscule intre rulari si a avea rezultate replicabile
+
     """
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    s = seed if seed is not None else SEED
 
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    random.seed(s)
+    np.random.seed(s)
+    torch.manual_seed(s)
+    torch.cuda.manual_seed_all(s)
 
-    print(f"✓ Seed setat: {seed}")
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    print(f"Seed set to {s} (deterministic mode)")
+    return s

@@ -1,0 +1,115 @@
+.
+├── README.md
+├── checkpoints
+│   ├── resnet18_final.pth
+│   ├── siglip_final.pth
+│   ├── siglip_image_encoder.pth
+│   └── siglip_text_encoder.pth
+├── data
+│   ├── prompts_expanded.json
+│   ├── prompts_expanded_all.json
+│   ├── prompts_expanded_structured.json
+│   ├── raw
+│   │   ├── test
+│   │   │   ├── AMD
+│   │   │   ├── CNV
+│   │   │   ├── CSR
+│   │   │   ├── DME
+│   │   │   ├── DR
+│   │   │   ├── DRUSEN
+│   │   │   ├── MH
+│   │   │   └── NORMAL
+│   │   ├── train
+│   │   │   ├── AMD
+│   │   │   ├── CNV
+│   │   │   ├── CSR
+│   │   │   ├── DME
+│   │   │   ├── DR
+│   │   │   ├── DRUSEN
+│   │   │   ├── MH
+│   │   │   └── NORMAL
+│   │   └── val
+│   │       ├── AMD
+│   │       ├── CNV
+│   │       ├── CSR
+│   │       ├── DME
+│   │       ├── DR
+│   │       ├── DRUSEN
+│   │       ├── MH
+│   │       └── NORMAL
+│   └── splits
+│       ├── test.csv
+│       ├── train.csv
+│       └── val.csv
+├── demo
+├── experiments
+│   ├── cnn_baseline
+│   │   ├── checkpoints
+│   │   │   └── best.pth
+│   │   ├── confusion_matrix.png
+│   │   ├── loss_curves.png
+│   │   └── metrics.csv
+│   ├── figures
+│   ├── image_encoder_pretrain
+│   │   ├── checkpoints
+│   │   │   ├── best_encoder.pth
+│   │   │   ├── final_encoder.pth
+│   │   │   └── last_checkpoint.pth
+│   │   ├── classification_report.txt
+│   │   ├── confusion_matrix.png
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── logs
+│   ├── siglip
+│   │   ├── checkpoints
+│   │   │   ├── best_checkpoint.pth
+│   │   │   ├── best_image_encoder.pth
+│   │   │   ├── best_text_encoder.pth
+│   │   │   └── final_siglip.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   └── text_encoder_pretrain
+│       ├── checkpoints
+│       │   ├── best_encoder.pth
+│       │   ├── final_encoder.pth
+│       │   └── last_checkpoint.pth
+│       ├── classification_report.txt
+│       ├── confusion_matrix.png
+│       ├── training_curves.png
+│       └── training_history.csv
+├── gen_tree.py
+├── notebooks
+├── requirements.txt
+├── scripts
+│   ├── create_csv_from_folders.py
+│   └── expand_prompts.py
+├── src
+│   ├── __init__.py
+│   ├── datasets
+│   │   ├── __init__.py
+│   │   └── oct_dataset.py
+│   ├── explainability
+│   │   └── __init__.py
+│   ├── losses
+│   │   ├── __init__.py
+│   │   └── siglip_loss.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── cnn_resnet18.py
+│   │   ├── image_encoder.py
+│   │   ├── siglip_model.py
+│   │   └── text_encoder.py
+│   ├── retrieval
+│   │   └── __init__.py
+│   ├── training
+│   │   ├── __init__.py
+│   │   ├── train_cnn.py
+│   │   ├── train_image_encoder_pretrain.py
+│   │   ├── train_siglip.py
+│   │   └── train_text_encoder_pretrain.py
+│   ├── uncertainty
+│   │   └── __init__.py
+│   └── utils
+│       ├── __init__.py
+│       └── seed.py
+└── structure.txt
