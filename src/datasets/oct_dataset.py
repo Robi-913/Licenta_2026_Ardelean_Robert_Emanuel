@@ -1,200 +1,176 @@
-import os
 import json
 import random
-import pandas as pd
 from pathlib import Path
-from PIL import Image
+
+import pandas as pd
 import torch
+from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
 
 class OCTDataset(Dataset):
-    """
-    Dataset PyTorch pentru OCT imagini cu prompt variation.
-
-    Args:
-        csv_path: Path către train.csv / val.csv / test.csv
-        data_root: Root folder pentru imagini (ex: 'data/raw')
-        prompts_path: Path către prompts.json
-        transform: torchvision transforms pentru imagini
-        tokenizer: Tokenizer pentru text (opțional, setat mai târziu)
-        mode: 'train' sau 'eval' - controlează dacă alege prompt random
-    """
 
     def __init__(
-            self,
-            csv_path,
-            data_root="data/raw",
-            prompts_path="data/prompts.json",
-            transform=None,
-            tokenizer=None,
-            mode='train'
+        self,
+        csv_path,
+        data_root="data/raw",
+        prompts_path=None,
+        transform=None, # se alege ce transformrai se aplica
+        tokenizer=None, # valoarea nuerica a unui cuvant(poate fi none)
+        mode="train", # train/val(test)
+        cache_images=False,  # tine pozele in memoria ram pt viteza sporita
     ):
-        self.data_root = Path(data_root)
-        self.df = pd.read_csv(csv_path)
+        self.root = Path(data_root)
+        self.mode = mode
         self.transform = transform
         self.tokenizer = tokenizer
-        self.mode = mode
+        self.should_cache = cache_images
+        self._img_cache = {}
 
-        # Încarcă prompturile
-        with open(prompts_path, 'r') as f:
-            self.prompts = json.load(f)
+        self.df = pd.read_csv(csv_path) # path urile pt poze
 
-        # Creează mapping label -> index pentru clasificare
-        self.classes = sorted(self.df['label'].unique())
-        self.class_to_idx = {cls: idx for idx, cls in enumerate(self.classes)}
+        self.classes = sorted(self.df["label"].unique()) # sortam clasele retinei(8 clase)
+        self.label_to_int = {name: i for i, name in enumerate(self.classes)} # mapeaza clasele cu un index cnv->0
 
-        print(f"Dataset încărcat: {len(self.df)} imagini, {len(self.classes)} clase")
-        print(f"Clase: {self.classes}")
+        self.prompts = None #loading prompt
+        if prompts_path is not None and Path(prompts_path).exists():
+            with open(prompts_path, "r") as fp:
+                self.prompts = json.load(fp)
+            print(f"Loaded prompts from: {prompts_path}")
+        else:
+            print("Image-only mode (no text prompts)")
+
+        print(f"Dataset: {len(self.df)} images, {len(self.classes)} classes")
+        print(f"Classes: {self.classes}")
 
     def __len__(self):
-        return len(self.df)
+        return len(self.df) # cate sample are datasetul (semple = imagine + label)
+
+    def _load_image(self, path, idx):
+        if self.should_cache and idx in self._img_cache:
+            return self._img_cache[idx].copy()
+            # returneaza copia imaginii daca este salvata in cache
+
+        img = Image.open(path).convert("RGB")
+        # deschide imaginea daca nu este salvata deja
+
+        if self.should_cache:
+            self._img_cache[idx] = img.copy()
+            # salvam imagine in cache
+
+        return img
+
+    def _pick_prompt(self, label):
+        if self.prompts is None:
+            return ""
+
+        candidates = self.prompts[label]
+        # incarcam propturile dupa label
+
+        if self.mode == "train":
+            return random.choice(candidates)
+            # alegem un propt random
+
+        return candidates[0]
+
+    def _tokenize(self, text):
+        if self.tokenizer is None or text == "":
+            return text, None
+
+        enc = self.tokenizer(
+            text,
+            padding="max_length",
+            truncation=True, # daca text e prea lung
+            max_length=77,
+            return_tensors="pt",
+        )
+        # transformam textul in token
+
+        ids = enc["input_ids"].squeeze(0) # aplatizam tensorul de tokeni [1,77] -> [77] (1 find sizeul batchului)
+        mask = enc["attention_mask"].squeeze(0) # 1 unde e text real, 0 unde e padding
+        # tokeni: [234, 89, 12, 55, 7, 0, 0, 0, 0, ... 0]
+        # masca: [1, 1, 1, 1, 1, 0, 0, 0, 0, ... 0]
+        # filtareaza tokeni reali de cei de padding(padding e umplutura fara valoare)
+        return ids, mask
 
     def __getitem__(self, idx):
-        # Citește rândul din CSV
-        row = self.df.iloc[idx]
-        img_path = self.data_root / row['image_path']
-        label = row['label']
-        label_idx = self.class_to_idx[label]
+        row = self.df.iloc[idx] # aici este indexul care are linie din csv adica o imagine + labelul
+        img_file = self.root / row["image_path"]# consturim path ul catre imagine
+        label_name = row["label"]
+        label_int = self.label_to_int[label_name]
 
-        # Încarcă imaginea
-        image = Image.open(img_path).convert('RGB')
+        img = self._load_image(img_file, idx)
+        if self.transform is not None:
+            img = self.transform(img)
+            # aplicam transformarile setate in clasa mai sus
 
-        # Aplică transformări
-        if self.transform:
-            image = self.transform(image)
-
-        # Alege prompt
-        if self.mode == 'train':
-            # Random prompt pentru training (prompt variation)
-            prompt = random.choice(self.prompts[label])
-        else:
-            # Primul prompt pentru eval (consistency)
-            prompt = self.prompts[label][0]
-
-        # Tokenizare text (dacă avem tokenizer)
-        if self.tokenizer:
-            tokens = self.tokenizer(
-                prompt,
-                padding='max_length',
-                truncation=True,
-                max_length=77,  # CLIP standard
-                return_tensors='pt'
-            )
-            input_ids = tokens['input_ids'].squeeze(0)
-            attention_mask = tokens['attention_mask'].squeeze(0)
-        else:
-            # Placeholder dacă nu avem tokenizer încă
-            input_ids = prompt
-            attention_mask = None
+        prompt_text = self._pick_prompt(label_name)
+        token_ids, attn_mask = self._tokenize(prompt_text)
 
         return {
-            'image': image,
-            'input_ids': input_ids,
-            'attention_mask': attention_mask,
-            'label': label_idx,
-            'label_name': label,
-            'prompt': prompt,
-            'image_path': str(img_path)
+            "image": img,
+            "input_ids": token_ids,
+            "attention_mask": attn_mask,
+            "label": label_int,
+            "label_name": label_name,
+            "prompt": prompt_text,
+            "image_path": str(img_file),
         }
 
 
-def get_transforms(mode='train', img_size=224):
-    """
-    Returnează transformări pentru imagini.
-
-    Args:
-        mode: 'train' (cu augmentare) sau 'eval' (fără augmentare)
-        img_size: dimensiunea imaginii (default 224 pentru ViT)
-    """
-    if mode == 'train':
-        return transforms.Compose([
-            transforms.Resize((img_size, img_size)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],  # ImageNet stats
-                std=[0.229, 0.224, 0.225]
-            )
-        ])
-    else:
-        return transforms.Compose([
-            transforms.Resize((img_size, img_size)),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-        ])
-
-
-# ============================================================================
-# TEST - verificare că totul funcționează
-# ============================================================================
-
-if __name__ == "__main__":
-    print("=== Test OCTDataset ===\n")
-
-    # Creează dataset de test
-    dataset = OCTDataset(
-        csv_path="data/splits/train.csv",
-        data_root="data/raw",
-        prompts_path="data/prompts.json",
-        transform=get_transforms(mode='train'),
-        tokenizer=None,  # Fără tokenizer pentru test simplu
-        mode='train'
+def get_transforms(mode="train", img_size=224):
+    normalize = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225],
     )
+    # valorile de normalizare sunt standard pt imaginile RGB preprocesate pt retelele neuronale
 
-    print(f"\nNumăr total imagini: {len(dataset)}")
-    print(f"Clase disponibile: {dataset.classes}\n")
+    if mode == "train":
+        return transforms.Compose([
+            transforms.Resize((img_size, img_size)), # 224x224
+            transforms.RandomHorizontalFlip(0.5), # 50% sanse de oglindire
+            transforms.RandomRotation(10), # rotire random pana la 10 grade
+            transforms.RandomAffine(0, translate=(0.05, 0.05)), # mutam random imaginea pe orizontal/verticak
+            transforms.RandomResizedCrop(
+                img_size, scale=(0.85, 1.0), ratio=(0.95, 1.05)
+            ), # crop random simuleaza zoom-ul
+            transforms.ColorJitter(
+                brightness=0.2, contrast=0.2, saturation=0.1, hue=0.0
+            ), # maodificari de limizozitate/contrats/saturatioe
+            transforms.GaussianBlur(3, sigma=(0.1, 0.5)), # blur gaussian pt imagini(pt imaginile mia neclare)
+            transforms.ToTensor(), # transforma imaginea in tensor(din 0-255 in 0-1)
+            normalize,
+            transforms.RandomErasing(
+                p=0.1, scale=(0.02, 0.15), ratio=(0.3, 3.3), value="random"
+            ),  # fortam modelul sa nu se bazeze pe o singura zona
+        ])
 
-    # Test: încarcă primul item
-    sample = dataset[0]
-
-    print("=== Sample 0 ===")
-    print(f"Image shape: {sample['image'].shape}")
-    print(f"Label index: {sample['label']}")
-    print(f"Label name: {sample['label_name']}")
-    print(f"Prompt: {sample['prompt']}")
-    print(f"Image path: {sample['image_path']}\n")
-
-    # Test: încarcă mai multe random samples
-    print("=== Random samples (prompturi diferite pentru aceeași clasă) ===")
-
-    # Găsește toate indexurile pentru o clasă (ex: AMD)
-    amd_indices = dataset.df[dataset.df['label'] == 'AMD'].index.tolist()
-
-    for i in range(3):
-        idx = random.choice(amd_indices)
-        sample = dataset[idx]
-        print(f"Sample {i + 1} (AMD): {sample['prompt']}")
-
-    print("\n=== DataLoader test ===")
-    from torch.utils.data import DataLoader
-
-
-    # Custom collate function pentru a gestiona None
-    def collate_fn(batch):
-        images = torch.stack([item['image'] for item in batch])
-        labels = torch.tensor([item['label'] for item in batch])
-        prompts = [item['prompt'] for item in batch]
-        label_names = [item['label_name'] for item in batch]
-
-        return {
-            'image': images,
-            'label': labels,
-            'prompt': prompts,
-            'label_name': label_names
-        }
+    return transforms.Compose([
+        transforms.Resize((img_size, img_size)),
+        transforms.ToTensor(),
+        normalize,
+    ])
 
 
-    loader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_fn)
-    batch = next(iter(loader))
+def collate_fn_image_only(batch):
+    images = torch.stack([sample["image"] for sample in batch])
+    labels = torch.tensor([sample["label"] for sample in batch])
+    return images, labels
+    # functia de collate pt dataloader, care ia un batch de sample-uri si le combina intr-un batch de imagini si etichete
+    # ex:32 dorim sa grupa 32 de imagini si labeluri [3,224,224] -> [32,3,224,224]
 
-    print(f"Batch image shape: {batch['image'].shape}")
-    print(f"Batch labels: {batch['label']}")
-    print(f"Batch prompts: {batch['prompt'][:2]}")  # primele 2
 
-    print("\nEverything works!")
+def collate_fn_image_text(batch):
+    return {
+        "image": torch.stack([s["image"] for s in batch]),
+        "input_ids": torch.stack([s["input_ids"] for s in batch]),
+        "attention_mask": torch.stack([s["attention_mask"] for s in batch]),
+        "label": torch.tensor([s["label"] for s in batch]),
+    }
+    # functia de collate pt dataloader, care ia un batch de sample-uri si le combina intr-un batch de imagini, tokeni, masti de atentie si etichete
+    # ex:32 dorim sa grupa 32 de imagini, tokeni, masti de atentie si labeluri
+    # imagini: [32,3,224,224]
+    # tokeni: [32,77]
+    # masti de atentie: [32,77]
+    # labeluri: [32]
