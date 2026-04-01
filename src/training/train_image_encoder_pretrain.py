@@ -23,11 +23,11 @@ from src.utils.seed import set_seed, SEED
 # ---------- config ----------
 
 class Config:
-    data_root = "data/raw"
-    train_csv = "data/splits/train.csv"
-    val_csv = "data/splits/val.csv"
+    data_root = "data/old/raw"
+    train_csv = "data/old/splits/train.csv"
+    val_csv = "data/old/splits/val.csv"
 
-    num_classes = 8
+    num_classes = 4
     img_size = 224
     patch_size = 32
     embed_dim = 384
@@ -65,7 +65,7 @@ os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
 
 class ImageClassifier(nn.Module):
 
-    def __init__(self, n_classes=8):
+    def __init__(self, n_classes=4):
         super().__init__()
         self.encoder = ImageEncoder(
             img_size=cfg.img_size,
@@ -185,10 +185,7 @@ def run_val(model, loader, loss_fn, ep):
 
 # ---------- plots / reports ----------
 
-CLASS_NAMES = ["AMD", "CNV", "CSR", "DME", "DR", "DRUSEN", "MH", "NORMAL"]
-
-
-def save_plots(hist, preds, labels):
+def save_plots(hist, preds, labels, class_names):
     ep = range(1, len(hist["train_loss"]) + 1)
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -216,7 +213,7 @@ def save_plots(hist, preds, labels):
     plt.figure(figsize=(10, 8))
     cm = confusion_matrix(labels, preds)
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
+                xticklabels=class_names, yticklabels=class_names)
     plt.title("Confusion Matrix")
     plt.ylabel("True")
     plt.xlabel("Predicted")
@@ -224,7 +221,7 @@ def save_plots(hist, preds, labels):
     plt.savefig(f"{cfg.save_dir}/confusion_matrix.png", dpi=150)
     plt.close()
 
-    report = classification_report(labels, preds, target_names=CLASS_NAMES, digits=4)
+    report = classification_report(labels, preds, target_names=class_names, digits=4)
     with open(f"{cfg.save_dir}/classification_report.txt", "w") as f:
         f.write(f"LR:{cfg.lr} LS:{cfg.label_smooth}\n{'=' * 70}\n\n{report}")
     print(report)
@@ -243,7 +240,7 @@ def main():
     train_dl, val_dl = make_loaders()
     print(f"  Train: {len(train_dl.dataset)} | Val: {len(val_dl.dataset)}")
 
-    model = ImageClassifier().to(cfg.device)
+    model = ImageClassifier(n_classes=cfg.num_classes).to(cfg.device)
     loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.label_smooth)
 
     opt = torch.optim.AdamW(
@@ -330,7 +327,7 @@ def main():
         f"{cfg.save_dir}/ckpts/final_encoder.pth",
     )
     pd.DataFrame(hist).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
-    save_plots(hist, preds, labels)
+    save_plots(hist, preds, labels, val_dl.dataset.classes)
 
     print(f"\n{'=' * 70}")
     print(f"  DONE! Best F1: {best_f1:.4f} | Acc: {max(hist['val_acc']):.1f}%")

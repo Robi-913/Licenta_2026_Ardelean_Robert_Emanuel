@@ -24,9 +24,9 @@ from src.utils.seed import set_seed, SEED
 # ---------- config ----------
 
 class Config:
-    prompts_file = "data/prompts_expanded_structured.json"
+    prompts_file = "data/old/prompts_expanded_structured.json"
 
-    num_classes = 8
+    num_classes = 4
     vocab_size = 30522
     max_len = 77
     embed_dim = 256
@@ -58,21 +58,20 @@ class Config:
 cfg = Config()
 os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
 
-CLASS_NAMES = ["AMD", "CNV", "CSR", "DME", "DR", "DRUSEN", "MH", "NORMAL"]
-
 
 # ---------- dataset ----------
 
 class PromptDataset(Dataset):
 
-    def __init__(self, prompts_file, tokenizer, split="train"):
+    def __init__(self, prompts_file, tokenizer, class_names, split="train"):
         self.tokenizer = tokenizer
+        self.class_names = class_names
 
         with open(prompts_file, "r", encoding="utf-8") as f:
             raw = json.load(f)
 
         self.samples = []
-        for i, cls_name in enumerate(CLASS_NAMES):
+        for i, cls_name in enumerate(self.class_names):
             entry = raw[cls_name]
             prompts = entry["all"] if isinstance(entry, dict) else entry
             for p in prompts:
@@ -118,7 +117,7 @@ class PromptDataset(Dataset):
 
 class TextClassifier(nn.Module):
 
-    def __init__(self, n_classes=8):
+    def __init__(self, n_classes=4):
         super().__init__()
         self.encoder = TextEncoder(
             vocab_size=cfg.vocab_size,
@@ -207,7 +206,7 @@ def run_val(model, loader, loss_fn, ep):
 
 # ---------- plots ----------
 
-def save_plots(hist, preds, labels):
+def save_plots(hist, preds, labels, class_names):
     ep = range(1, len(hist["train_loss"]) + 1)
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -235,7 +234,7 @@ def save_plots(hist, preds, labels):
     plt.figure(figsize=(10, 8))
     cm = confusion_matrix(labels, preds)
     sns.heatmap(cm, annot=True, fmt="d", cmap="Greens",
-                xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES)
+                xticklabels=class_names, yticklabels=class_names)
     plt.title("Confusion Matrix")
     plt.ylabel("True")
     plt.xlabel("Predicted")
@@ -243,7 +242,7 @@ def save_plots(hist, preds, labels):
     plt.savefig(f"{cfg.save_dir}/confusion_matrix.png", dpi=150)
     plt.close()
 
-    report = classification_report(labels, preds, target_names=CLASS_NAMES, digits=4)
+    report = classification_report(labels, preds, target_names=class_names, digits=4)
     with open(f"{cfg.save_dir}/classification_report.txt", "w") as f:
         f.write(f"LR:{cfg.lr} LS:{cfg.label_smooth} Drop:{cfg.drop}\n")
         f.write(f"{'=' * 70}\n\n")
@@ -263,14 +262,19 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 
-    train_ds = PromptDataset(cfg.prompts_file, tokenizer, "train")
-    val_ds = PromptDataset(cfg.prompts_file, tokenizer, "val")
+    with open(cfg.prompts_file, "r", encoding="utf-8") as f:
+        prompts_data = json.load(f)
+    class_names = sorted(prompts_data.keys())
+    cfg.num_classes = len(class_names)
+
+    train_ds = PromptDataset(cfg.prompts_file, tokenizer, class_names, "train")
+    val_ds = PromptDataset(cfg.prompts_file, tokenizer, class_names, "val")
 
     loader_kw = dict(num_workers=cfg.workers, pin_memory=cfg.pin_mem)
     train_dl = DataLoader(train_ds, batch_size=cfg.bs, shuffle=True, **loader_kw)
     val_dl = DataLoader(val_ds, batch_size=cfg.bs, shuffle=False, **loader_kw)
 
-    model = TextClassifier().to(cfg.device)
+    model = TextClassifier(n_classes=cfg.num_classes).to(cfg.device)
     loss_fn = nn.CrossEntropyLoss(label_smoothing=cfg.label_smooth)
 
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.wd)
@@ -340,7 +344,7 @@ def main():
         f"{cfg.save_dir}/ckpts/final_encoder.pth",
     )
     pd.DataFrame(hist).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
-    save_plots(hist, preds, labels)
+    save_plots(hist, preds, labels, class_names)
 
     print(f"\n{'=' * 70}")
     print(f"  DONE! Best F1: {best_f1:.4f} | Acc: {max(hist['val_acc']):.1f}%")
