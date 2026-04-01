@@ -88,7 +88,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch):
         # ─────────────────────────────────────────────────────────────────────
         # 3. FORWARD PASS — trece imaginile prin model
         # ─────────────────────────────────────────────────────────────────────
-        outputs = model(images)  # Shape: [batch_size, 8]
+        outputs = model(images)  # Shape: [batch_size, num_classes]
         # outputs = scoruri raw (logits) pentru fiecare clasă
         # Ex: [[-0.3, 1.4, -3.1, 0.2, ...], [...], ...]
 
@@ -285,6 +285,7 @@ def train_cnn():
     BATCH_SIZE = 32  # Câte imagini procesează deodată
     LEARNING_RATE = 0.001  # Cât de mari sunt pașii de învățare (1e-3)
     NUM_WORKERS = 0  # Câte procese paralele pentru încărcare date
+    NUM_CLASSES = 4  # Numărul de clase folosit la clasificare
 
     # Paths
     OUTPUT_DIR = Path("experiments/cnn_baseline")
@@ -313,9 +314,9 @@ def train_cnn():
 
     # Dataset train
     train_dataset = OCTDataset(
-        csv_path="data/splits/train.csv",
-        data_root="data/raw",
-        prompts_path="data/prompts.json",
+        csv_path="data/old/splits/train.csv",
+        data_root="data/old/raw",
+        prompts_path="data/old/prompts.json",
         transform=get_transforms(mode='train'),  # Cu augmentare
         tokenizer=None,  # Nu avem nevoie de tokenizer pentru CNN
         mode='train'
@@ -323,9 +324,9 @@ def train_cnn():
 
     # Dataset validation
     val_dataset = OCTDataset(
-        csv_path="data/splits/val.csv",
-        data_root="data/raw",
-        prompts_path="data/prompts.json",
+        csv_path="data/old/splits/val.csv",
+        data_root="data/old/raw",
+        prompts_path="data/old/prompts.json",
         transform=get_transforms(mode='eval'),  # Fără augmentare
         tokenizer=None,
         mode='eval'
@@ -356,7 +357,7 @@ def train_cnn():
     # ═════════════════════════════════════════════════════════════════════════
     print("\n[2/6] Creare model...")
 
-    model = ResNet18OCT(num_classes=8, pretrained=False)
+    model = ResNet18OCT(num_classes=NUM_CLASSES, use_pretrained=False)
     model = model.to(device)  # Mută modelul pe GPU
 
     # ═════════════════════════════════════════════════════════════════════════

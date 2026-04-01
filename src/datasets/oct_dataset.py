@@ -14,7 +14,7 @@ class OCTDataset(Dataset):
     def __init__(
         self,
         csv_path,
-        data_root="data/raw",
+        data_root="data/old/raw",
         prompts_path=None,
         transform=None, # se alege ce transformrai se aplica
         tokenizer=None, # valoarea nuerica a unui cuvant(poate fi none)
@@ -30,7 +30,7 @@ class OCTDataset(Dataset):
 
         self.df = pd.read_csv(csv_path) # path urile pt poze
 
-        self.classes = sorted(self.df["label"].unique()) # sortam clasele retinei(8 clase)
+        self.classes = sorted(self.df["label"].unique()) # sortam clasele retinei din csv
         self.label_to_int = {name: i for i, name in enumerate(self.classes)} # mapeaza clasele cu un index cnv->0
 
         self.prompts = None #loading prompt

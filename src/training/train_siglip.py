@@ -24,10 +24,10 @@ from src.utils.seed import set_seed, SEED
 # ---------- config ----------
 
 class Config:
-    data_root = "data/raw"
-    train_csv = "data/splits/train.csv"
-    val_csv = "data/splits/val.csv"
-    prompts_path = "data/prompts_expanded.json"
+    data_root = "data/old/raw"
+    train_csv = "data/old/splits/train.csv"
+    val_csv = "data/old/splits/val.csv"
+    prompts_path = "data/old/prompts_expanded.json"
 
     pretrained_img = "experiments/image_encoder_pretrain/checkpoints/best_encoder.pth"
     pretrained_txt = "experiments/text_encoder_pretrain/checkpoints/best_encoder.pth"
