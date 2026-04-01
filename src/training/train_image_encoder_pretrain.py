@@ -29,36 +29,36 @@ class Config:
 
     num_classes = 4
     img_size = 224
-    patch_size = 32
+    patch_size = 16
     embed_dim = 384
     depth = 6
     heads = 6
     out_dim = 256
 
-    bs = 32
-    epochs = 30
-    lr = 5e-4
+    bs = 64
+    epochs = 50
+    lr = 2e-4
     wd = 1e-4
     label_smooth = 0.1
     warmup = 3
     grad_clip = 1.0
-    patience = 8
+    patience = 15
 
-    drop = 0.0
+    drop = 0.2
     path_drop = 0.1
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = torch.cuda.is_available()
-    workers = 0
+    workers = 8
     pin_mem = True
 
     save_dir = "experiments/image_encoder_pretrain"
     resume = None
-    # resume = "experiments/image_encoder_pretrain/ckpts/last.pth"
+    # resume = "experiments/image_encoder_pretrain/checkpoints/last.pth"
 
 
 cfg = Config()
-os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
+os.makedirs(f"{cfg.save_dir}/checkpoints", exist_ok=True)
 
 
 # ---------- model ----------
@@ -129,8 +129,8 @@ def run_train(model, loader, loss_fn, opt, scaler, ep):
 
     pbar = tqdm(loader, desc=f"Ep {ep + 1}/{cfg.epochs} [train]")
     for imgs, labels in pbar:
-        imgs = imgs.to(cfg.device)
-        labels = labels.to(cfg.device)
+        imgs = imgs.to(cfg.device, non_blocking=True)
+        labels = labels.to(cfg.device, non_blocking=True)
 
         opt.zero_grad()
 
@@ -162,8 +162,8 @@ def run_val(model, loader, loss_fn, ep):
     all_preds, all_labels = [], []
 
     for imgs, labels in tqdm(loader, desc=f"Ep {ep + 1}/{cfg.epochs} [val]"):
-        imgs = imgs.to(cfg.device)
-        labels = labels.to(cfg.device)
+        imgs = imgs.to(cfg.device, non_blocking=True)
+        labels = labels.to(cfg.device, non_blocking=True)
 
         with autocast(cfg.device, enabled=cfg.amp):
             logits, _ = model(imgs)
@@ -301,7 +301,7 @@ def main():
             print(f"  Best F1: {best_f1:.4f}")
             torch.save(
                 model.encoder.state_dict(),
-                f"{cfg.save_dir}/ckpts/best_encoder.pth",
+                f"{cfg.save_dir}/checkpoints/best_encoder.pth",
             )
         else:
             wait += 1
@@ -316,7 +316,7 @@ def main():
             "best_f1": best_f1,
             "wait": wait,
             "hist": hist,
-        }, f"{cfg.save_dir}/ckpts/last.pth")
+        }, f"{cfg.save_dir}/checkpoints/last.pth")
 
         if wait >= cfg.patience:
             print(f"  Early stopping at epoch {ep + 1}")
@@ -324,7 +324,7 @@ def main():
 
     torch.save(
         model.encoder.state_dict(),
-        f"{cfg.save_dir}/ckpts/final_encoder.pth",
+        f"{cfg.save_dir}/checkpoints/final_encoder.pth",
     )
     pd.DataFrame(hist).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
     save_plots(hist, preds, labels, val_dl.dataset.classes)

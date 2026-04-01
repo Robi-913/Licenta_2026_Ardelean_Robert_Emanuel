@@ -35,17 +35,17 @@ class Config:
     out_dim = 256
 
     bs = 64
-    epochs = 20
-    lr = 1e-4
-    wd = 1e-3
-    label_smooth = 0.15
+    epochs = 15
+    lr = 8e-5
+    wd = 0.1
+    label_smooth = 0.10
     warmup = 2
     grad_clip = 1.0
     patience = 6
-    drop = 0.1
+    drop = 0.2
 
     target_train = 12000
-    target_val = 1500
+    target_val = 2000
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = torch.cuda.is_available()
@@ -56,7 +56,7 @@ class Config:
 
 
 cfg = Config()
-os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
+os.makedirs(f"{cfg.save_dir}/checkpoints", exist_ok=True)
 
 
 # ---------- dataset ----------
@@ -318,7 +318,7 @@ def main():
             print(f"  Best F1: {best_f1:.4f}")
             torch.save(
                 model.encoder.state_dict(),
-                f"{cfg.save_dir}/ckpts/best_encoder.pth",
+                f"{cfg.save_dir}/checkpoints/best_encoder.pth",
             )
         else:
             wait += 1
@@ -333,7 +333,7 @@ def main():
             "best_f1": best_f1,
             "wait": wait,
             "hist": hist,
-        }, f"{cfg.save_dir}/ckpts/last.pth")
+        }, f"{cfg.save_dir}/checkpoints/last.pth")
 
         if wait >= cfg.patience:
             print(f"  Early stopping at epoch {ep + 1}")
@@ -341,7 +341,7 @@ def main():
 
     torch.save(
         model.encoder.state_dict(),
-        f"{cfg.save_dir}/ckpts/final_encoder.pth",
+        f"{cfg.save_dir}/checkpoints/final_encoder.pth",
     )
     pd.DataFrame(hist).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
     save_plots(hist, preds, labels, class_names)

@@ -268,6 +268,11 @@ def plot_confusion_matrix(y_true, y_pred, class_names, save_path):
     plt.close()
 
 
+def collate_fn(batch):
+    images = torch.stack([item['image'] for item in batch])
+    labels = torch.tensor([item['label'] for item in batch])
+    return {'image': images, 'label': labels}
+
 def train_cnn():
     """
     Funcția principală de antrenare — orchestrează tot flow-ul.
@@ -284,7 +289,7 @@ def train_cnn():
     NUM_EPOCHS = 30  # De câte ori trece prin tot dataset-ul
     BATCH_SIZE = 32  # Câte imagini procesează deodată
     LEARNING_RATE = 0.001  # Cât de mari sunt pașii de învățare (1e-3)
-    NUM_WORKERS = 0  # Câte procese paralele pentru încărcare date
+    NUM_WORKERS = 8  # Câte procese paralele pentru încărcare date
     NUM_CLASSES = 4  # Numărul de clase folosit la clasificare
 
     # Paths
@@ -305,12 +310,6 @@ def train_cnn():
     # 2. ÎNCARCĂ DATELE
     # ═════════════════════════════════════════════════════════════════════════
     print("\n[1/6] Încărcare date...")
-
-    # Custom collate function (fix pentru None în attention_mask)
-    def collate_fn(batch):
-        images = torch.stack([item['image'] for item in batch])
-        labels = torch.tensor([item['label'] for item in batch])
-        return {'image': images, 'label': labels}
 
     # Dataset train
     train_dataset = OCTDataset(
@@ -338,6 +337,7 @@ def train_cnn():
         batch_size=BATCH_SIZE,
         shuffle=True,  # Amestecă datele la fiecare epoch (important!)
         num_workers=NUM_WORKERS,  # Procese paralele pentru încărcare
+        pin_memory=True,
         collate_fn=collate_fn
     )
 

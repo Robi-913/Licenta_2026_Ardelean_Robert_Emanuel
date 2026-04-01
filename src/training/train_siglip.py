@@ -27,13 +27,13 @@ class Config:
     data_root = "data/old/raw"
     train_csv = "data/old/splits/train.csv"
     val_csv = "data/old/splits/val.csv"
-    prompts_path = "data/old/prompts_expanded.json"
+    prompts_path = "data/old/prompts_expanded_all.json"
 
     pretrained_img = "experiments/image_encoder_pretrain/checkpoints/best_encoder.pth"
     pretrained_txt = "experiments/text_encoder_pretrain/checkpoints/best_encoder.pth"
 
     img_size = 224
-    patch_size = 32
+    patch_size = 16
     img_dim = 384
     img_depth = 6
     img_heads = 6
@@ -48,33 +48,76 @@ class Config:
 
     bs = 32
     accum = 2
-    epochs = 50
-    img_lr = 1e-6
-    txt_lr = 1e-7
-    scale_lr = 1e-3
-    wd = 0.01
-    warmup = 3
+    epochs = 40
+    img_lr = 5e-6
+    txt_lr = 1e-6
+    scale_lr = 5e-3
+    wd = 0.05
+    warmup = 5
     min_lr = 1e-7
     grad_clip = 1.0
     max_scale = 4.6052
 
-    patience = 10
+    patience = 8
     min_delta = 0.001
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = torch.cuda.is_available()
-    workers = 0
+    workers = 4
 
     save_dir = "experiments/siglip"
 
 
 cfg = Config()
-os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
+os.makedirs(f"{cfg.save_dir}/checkpoints", exist_ok=True)
 
 
 # ---------- helpers ----------
 
+def collate_fn(batch):
+    return {
+        "images": torch.stack([b["image"] for b in batch]),
+        "input_ids": torch.stack([b["input_ids"] for b in batch]),
+        "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
+        "labels": torch.tensor([b["label"] for b in batch]),
+    }
+
+def build_ds(csv, mode, tokenizer):
+    return OCTDataset(
+        csv_path=csv,
+        data_root=cfg.data_root,
+        prompts_path=cfg.prompts_path,
+        transform=get_transforms(mode, cfg.img_size),
+        tokenizer=tokenizer,
+        mode=mode,
+    )
+
+def make_loaders(tokenizer):
+    """Creează DataLoader-ele folosind funcțiile globale de mai sus."""
+    shared = dict(
+        num_workers=cfg.workers,
+        pin_memory=True,
+        collate_fn=collate_fn
+    )
+
+    train_dl = DataLoader(
+        build_ds(cfg.train_csv, "train", tokenizer),
+        batch_size=cfg.bs,
+        shuffle=True,
+        drop_last=True,
+        **shared,
+    )
+
+    val_dl = DataLoader(
+        build_ds(cfg.val_csv, "eval", tokenizer),
+        batch_size=cfg.bs,
+        shuffle=False,
+        **shared,
+    )
+    return train_dl, val_dl
+
 def load_pretrained(model):
+    """Încarcă greutățile pre-antrenate pentru encodere."""
     mapping = {
         "img_enc": cfg.pretrained_img,
         "txt_enc": cfg.pretrained_txt,
@@ -89,39 +132,6 @@ def load_pretrained(model):
         print(f"  {attr}: {path}")
         if result.missing_keys:
             print(f"    missing: {result.missing_keys}")
-
-
-def make_loaders(tokenizer):
-    def build_ds(csv, mode):
-        return OCTDataset(
-            csv_path=csv,
-            data_root=cfg.data_root,
-            prompts_path=cfg.prompts_path,
-            transform=get_transforms(mode, cfg.img_size),
-            tokenizer=tokenizer,
-            mode=mode,
-        )
-
-    def collate(batch):
-        return {
-            "images": torch.stack([b["image"] for b in batch]),
-            "input_ids": torch.stack([b["input_ids"] for b in batch]),
-            "attention_mask": torch.stack([b["attention_mask"] for b in batch]),
-            "labels": torch.tensor([b["label"] for b in batch]),
-        }
-
-    shared = dict(num_workers=cfg.workers, pin_memory=True, collate_fn=collate)
-
-    train_dl = DataLoader(
-        build_ds(cfg.train_csv, "train"),
-        batch_size=cfg.bs, shuffle=True, drop_last=True, **shared,
-    )
-    val_dl = DataLoader(
-        build_ds(cfg.val_csv, "eval"),
-        batch_size=cfg.bs, shuffle=False, **shared,
-    )
-    return train_dl, val_dl
-
 
 # ---------- retrieval eval ----------
 
@@ -382,10 +392,10 @@ def main():
                 "scaler": scaler.state_dict(),
                 "best_recall": best_recall,
                 "hist": hist,
-            }, f"{cfg.save_dir}/ckpts/best.pth")
+            }, f"{cfg.save_dir}/checkpoints/best.pth")
 
-            torch.save(model.img_enc.state_dict(), f"{cfg.save_dir}/ckpts/best_img_enc.pth")
-            torch.save(model.txt_enc.state_dict(), f"{cfg.save_dir}/ckpts/best_txt_enc.pth")
+            torch.save(model.img_enc.state_dict(), f"{cfg.save_dir}/checkpoints/best_img_enc.pth")
+            torch.save(model.txt_enc.state_dict(), f"{cfg.save_dir}/checkpoints/best_txt_enc.pth")
         else:
             wait += 1
             print(f"  ({wait}/{cfg.patience})")
@@ -394,11 +404,11 @@ def main():
             print(f"  Early stopping at epoch {ep + 1}")
             break
 
-    torch.save(model.state_dict(), f"{cfg.save_dir}/ckpts/final.pth")
+    torch.save(model.state_dict(), f"{cfg.save_dir}/checkpoints/final.pth")
 
     os.makedirs("checkpoints", exist_ok=True)
-    best_img_path = f"{cfg.save_dir}/ckpts/best_img_enc.pth"
-    best_txt_path = f"{cfg.save_dir}/ckpts/best_txt_enc.pth"
+    best_img_path = f"{cfg.save_dir}/checkpoints/best_img_enc.pth"
+    best_txt_path = f"{cfg.save_dir}/checkpoints/best_txt_enc.pth"
 
     if os.path.exists(best_img_path):
         shutil.copy2(best_img_path, "checkpoints/siglip_image_encoder.pth")

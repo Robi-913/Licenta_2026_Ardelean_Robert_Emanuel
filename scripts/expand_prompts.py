@@ -123,6 +123,18 @@ TEMPLATES = {
         "foveal OCT cut demonstrating {cond}",
         "perifoveal OCT scan showing {cond}",
     ],
+"severity": [
+        "an OCT scan indicating a {cond} case",
+        "retinal imaging showing signs of {cond} progression",
+        "OCT displaying a {cond} state of the macula",
+        "high-resolution OCT revealing a {cond} clinical picture",
+    ],
+    "layered": [
+        "disruption of the outer retinal layers consistent with {cond}",
+        "OCT cross-section showing {cond} localized beneath the fovea",
+        "intraretinal alterations on OCT diagnostic for {cond}",
+        "subretinal architecture changes indicating {cond}",
+    ],
 }
 
 
@@ -435,7 +447,7 @@ def show_stats(prompts):
 # ---------- entry ----------
 
 if __name__ == "__main__":
-    TARGET = 150
+    TARGET = 3000
 
     out_dir = Path("data/old")
     out_dir.mkdir(exist_ok=True)
