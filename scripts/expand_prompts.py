@@ -139,27 +139,6 @@ CONDITIONS = {
         "age-related retinal pigment changes", "AMD with RPE degeneration",
         "maculopathy associated with aging",
     ],
-    "CNV": [
-        "choroidal neovascularization", "CNV pathology",
-        "neovascular membrane formation", "abnormal choroidal vessel growth",
-        "subretinal neovascularization", "choroidal new vessel formation",
-        "type 2 neovascularization", "fibrovascular proliferation under the retina",
-        "active neovascular lesion", "CNV-related subretinal hemorrhage",
-        "vascular invasion from the choroid", "neovascular AMD with CNV",
-        "choroidal vascular membrane", "subretinal fibrovascular tissue",
-        "exudative neovascular process",
-    ],
-    "CSR": [
-        "central serous retinopathy", "central serous chorioretinopathy",
-        "serous retinal detachment", "subretinal fluid accumulation",
-        "CSR pathology", "idiopathic serous macular detachment",
-        "focal serous pigment epithelial detachment",
-        "CSR-associated neurosensory detachment",
-        "serous elevation of the macula", "localized subretinal fluid collection",
-        "serous maculopathy", "retinal pigment epithelial leak",
-        "bullous serous detachment", "pachychoroid-associated CSR",
-        "stress-related serous retinopathy",
-    ],
     "DME": [
         "diabetic macular edema", "diabetic retinal edema",
         "macular swelling due to diabetes", "diabetic macular thickening",
@@ -171,17 +150,6 @@ CONDITIONS = {
         "chronic diabetic macular edema", "tractional diabetic macular edema",
         "diabetic macular cysts",
     ],
-    "DR": [
-        "diabetic retinopathy", "diabetic retinal disease",
-        "retinopathy caused by diabetes", "diabetic microvascular retinal damage",
-        "DR pathology", "diabetic retinal vascular changes",
-        "microaneurysms and hemorrhages from diabetes", "diabetic fundus changes",
-        "retinal ischemia due to diabetes", "diabetes-induced retinal vasculopathy",
-        "diabetic retinal microangiopathy", "diabetic dot and blot hemorrhages",
-        "hard exudates from diabetic retinopathy",
-        "cotton-wool spots from diabetes",
-        "diabetic retinal nerve fiber layer damage",
-    ],
     "DRUSEN": [
         "drusen deposits", "retinal drusen accumulation",
         "macular drusen deposits", "sub-retinal pigment epithelium deposits",
@@ -191,14 +159,6 @@ CONDITIONS = {
         "accumulation of waste material beneath the retina",
         "cuticular drusen", "calcified drusen", "reticular pseudodrusen",
         "subretinal drusenoid deposits", "drusen with pigmentary changes",
-    ],
-    "MH": [
-        "macular hole", "full-thickness macular hole", "foveal retinal hole",
-        "central macular defect", "MH pathology", "lamellar macular hole",
-        "impending macular hole", "vitreomacular traction with hole formation",
-        "foveal dehiscence", "stage IV macular hole", "traumatic macular hole",
-        "myopic macular hole", "macular hole with cuff of subretinal fluid",
-        "macular hole with operculum", "chronic macular hole",
     ],
     "NORMAL": [
         "normal retinal anatomy", "healthy retina", "no retinal pathology",
@@ -216,12 +176,8 @@ CONDITIONS = {
 
 MODIFIERS = {
     "AMD":    ["", "early ", "intermediate ", "advanced ", "dry ", "wet ", "severe ", "late-stage ", "bilateral ", "unilateral ", "progressive ", "stable "],
-    "CNV":    ["", "active ", "classic ", "occult ", "minimal ", "extensive ", "subfoveal ", "juxtafoveal ", "extrafoveal ", "recurrent ", "treatment-naive ", "persistent "],
-    "CSR":    ["", "acute ", "chronic ", "recurrent ", "resolving ", "bilateral ", "unilateral ", "self-limiting ", "persistent ", "multifocal "],
     "DME":    ["", "mild ", "moderate ", "severe ", "diffuse ", "focal ", "cystoid ", "refractory ", "center-involving ", "non-center-involving ", "chronic ", "treatment-resistant "],
-    "DR":     ["", "non-proliferative ", "proliferative ", "mild ", "moderate ", "severe ", "early ", "advanced ", "high-risk ", "stable ", "progressing "],
     "DRUSEN": ["", "soft ", "hard ", "confluent ", "small ", "large ", "scattered ", "dense ", "calcified ", "numerous ", "bilateral ", "macular "],
-    "MH":     ["", "partial ", "full-thickness ", "lamellar ", "stage 1 ", "stage 2 ", "stage 3 ", "stage 4 ", "small ", "large ", "chronic ", "acute "],
     "NORMAL": ["", "completely ", "perfectly ", "textbook ", "entirely ", "demonstrably ", "clearly "],
 }
 
@@ -253,36 +209,60 @@ COMP_TEMPLATES = [
 ALL_CLASSES = list(CONDITIONS.keys())
 
 DIFF_FEATURES = {
-    ("AMD", "DRUSEN"):    ["geographic atrophy", "RPE disruption", "outer retinal thinning", "photoreceptor loss"],
-    ("AMD", "CNV"):       ["absence of active neovascularization", "dry atrophic changes", "no subretinal fluid", "no hemorrhage"],
-    ("AMD", "NORMAL"):    ["RPE irregularity", "retinal thinning", "pigmentary changes", "loss of outer retinal bands"],
-    ("CNV", "CSR"):       ["neovascular membrane presence", "subretinal hemorrhage", "fibrovascular tissue", "hyperreflective material"],
-    ("CNV", "AMD"):       ["active vessel growth", "subretinal hyperreflective material", "exudative changes", "intraretinal fluid"],
-    ("CNV", "DME"):       ["choroidal origin of fluid", "membrane visible", "type 2 neovascularization", "pigment epithelial detachment"],
-    ("CSR", "DME"):       ["lack of diabetic changes", "focal serous detachment", "intact photoreceptors", "no intraretinal cysts"],
-    ("CSR", "CNV"):       ["absence of neovascular membrane", "smooth RPE", "clear subretinal space", "no hemorrhage"],
-    ("CSR", "MH"):        ["intact foveal tissue", "dome-shaped detachment", "no retinal defect", "smooth foveal contour"],
-    ("DME", "CSR"):       ["intraretinal cystoid spaces", "diffuse thickening", "diabetic microaneurysms", "hard exudates"],
-    ("DME", "DR"):        ["macular thickening", "cystoid spaces", "center-involving edema", "foveal swelling"],
-    ("DME", "MH"):        ["no full-thickness defect", "preserved foveal tissue", "fluid accumulation not hole", "retinal thickening"],
-    ("DR", "DME"):        ["peripheral vascular changes", "microaneurysms", "cotton-wool spots", "retinal hemorrhages"],
-    ("DR", "NORMAL"):     ["hemorrhages and exudates", "vascular abnormalities", "retinal ischemia", "nerve fiber layer defects"],
-    ("DR", "AMD"):        ["diabetic vascular origin", "microaneurysms present", "hard exudates", "neovascularization at disc"],
-    ("DRUSEN", "AMD"):    ["isolated deposits without atrophy", "preserved RPE", "no geographic atrophy", "intact outer retina"],
-    ("DRUSEN", "NORMAL"): ["subretinal deposits", "RPE undulations", "hyperreflective bumps", "irregular RPE profile"],
-    ("DRUSEN", "CNV"):    ["no neovascular membrane", "no fluid", "stable deposits", "no exudation"],
-    ("MH", "CSR"):        ["full-thickness retinal defect", "absence of subretinal fluid", "intraretinal cyst at fovea", "tissue loss"],
-    ("MH", "NORMAL"):     ["foveal tissue loss", "cystic edges", "operculum", "disrupted foveal contour"],
-    ("MH", "DME"):        ["focal foveal defect", "no diffuse edema", "sharp hole edges", "vitreous traction"],
-    ("NORMAL", "DRUSEN"): ["smooth RPE", "no deposits", "uniform retinal layers", "clean sub-RPE space"],
-    ("NORMAL", "DR"):     ["intact vasculature", "no hemorrhages", "healthy retinal structure", "no exudates"],
-    ("NORMAL", "AMD"):    ["preserved macular thickness", "intact photoreceptor layer", "no degeneration", "normal RPE"],
-    ("NORMAL", "MH"):     ["intact foveal pit", "no retinal defect", "continuous retinal layers", "normal foveal depression"],
-    ("NORMAL", "DME"):    ["no macular thickening", "no intraretinal fluid", "normal retinal thickness", "no cystoid changes"],
-    ("NORMAL", "CSR"):    ["no subretinal fluid", "flat retina", "no serous detachment", "normal choroidal thickness"],
-    ("NORMAL", "CNV"):    ["no neovascular membrane", "no subretinal hemorrhage", "no exudation", "intact Bruch membrane"],
-}
+    # --- AMD (Age-related Macular Degeneration) ---
+    ("AMD", "DRUSEN"): [
+        "geographic atrophy", "RPE disruption", "outer retinal thinning",
+        "photoreceptor loss", "subretinal tubulations", "fibrotic scars",
+        "choroidal neovascularization", "subretinal hyperreflective material"
+    ],
+    ("AMD", "NORMAL"): [
+        "RPE irregularity", "retinal thinning", "pigmentary changes",
+        "loss of outer retinal bands", "macular atrophy", "drastic RPE elevation"
+    ],
+    ("AMD", "DME"): [
+        "dry macular degeneration", "retinal pigment epithelium atrophy",
+        "lack of intraretinal cysts", "outer retinal layers collapse", "no diffuse swelling"
+    ],
 
+    ("DRUSEN", "AMD"): [
+        "isolated deposits without atrophy", "preserved RPE", "no geographic atrophy",
+        "intact outer retina", "nodular sub-RPE deposits", "confluent drusen without scarring"
+    ],
+    ("DRUSEN", "NORMAL"): [
+        "subretinal deposits", "RPE undulations", "hyperreflective bumps",
+        "irregular RPE profile", "focal RPE elevations", "Bruch's membrane thickening"
+    ],
+    ("DRUSEN", "DME"): [
+        "sub-RPE material", "lack of retinal edema", "no fluid pockets",
+        "dry retinal texture", "no cystoid spaces", "localized RPE humps"
+    ],
+
+    ("DME", "NORMAL"): [
+        "intraretinal fluid", "cystoid macular edema", "increased retinal thickness",
+        "hyporeflective spaces", "neurosensory detachment", "diffuse retinal swelling"
+    ],
+    ("DME", "AMD"): [
+        "intraretinal cystic spaces", "spongiform retinal thickening",
+        "no sub-RPE deposits", "fluid in inner nuclear layer", "massive macular edema"
+    ],
+    ("DME", "DRUSEN"): [
+        "diffuse intraretinal fluid", "large cystoid spaces", "lack of focal drusen",
+        "increased foveal thickness", "presence of hard exudates"
+    ],
+
+    ("NORMAL", "DRUSEN"): [
+        "smooth RPE", "no deposits", "uniform retinal layers",
+        "clean sub-RPE space", "flat Bruch's membrane", "continuous ELM line"
+    ],
+    ("NORMAL", "AMD"): [
+        "preserved macular thickness", "intact photoreceptor layer",
+        "no degeneration", "normal RPE", "continuous RPE-choriocapillaris complex"
+    ],
+    ("NORMAL", "DME"): [
+        "no macular thickening", "no intraretinal fluid",
+        "normal retinal thickness", "no cystoid changes", "foveal pit depression preserved"
+    ],
+}
 
 # ---------- generators ----------
 
@@ -457,7 +437,7 @@ def show_stats(prompts):
 if __name__ == "__main__":
     TARGET = 150
 
-    out_dir = Path("data")
+    out_dir = Path("data/old")
     out_dir.mkdir(exist_ok=True)
 
     prompts = generate_all(target=TARGET)
