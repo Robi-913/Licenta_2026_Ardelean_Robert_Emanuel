@@ -66,6 +66,18 @@ class OCTDataset(Dataset):
             return ""
 
         candidates = self.prompts[label]
+
+        if self.mode == "train":
+            prompt = random.choice(candidates)
+            # Mică augmentare de text: 10% șansă să adăugăm un prefix random
+            if random.random() < 0.1:
+                prefixes = ["An OCT scan of ", "This image shows ", "Patient with "]
+                prompt = random.choice(prefixes) + prompt.lower()
+            return prompt
+
+        return candidates[0]
+
+        candidates = self.prompts[label]
         # incarcam propturile dupa label
 
         if self.mode == "train":
@@ -124,26 +136,27 @@ def get_transforms(mode="train", img_size=224):
         mean=[0.485, 0.456, 0.406],
         std=[0.229, 0.224, 0.225],
     )
-    # valorile de normalizare sunt standard pt imaginile RGB preprocesate pt retelele neuronale
 
     if mode == "train":
         return transforms.Compose([
-            transforms.Resize((img_size, img_size)), # 224x224
-            transforms.RandomHorizontalFlip(0.5), # 50% sanse de oglindire
-            transforms.RandomRotation(10), # rotire random pana la 10 grade
-            transforms.RandomAffine(0, translate=(0.05, 0.05)), # mutam random imaginea pe orizontal/verticak
+            transforms.Resize((img_size, img_size)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            # Rotire mică (medicina nu suportă rotiri mari)
+            transforms.RandomRotation(degrees=5),
+            # Zoom și Crop (foarte important pentru a vedea detalii de edem/drusen)
             transforms.RandomResizedCrop(
-                img_size, scale=(0.85, 1.0), ratio=(0.95, 1.05)
-            ), # crop random simuleaza zoom-ul
-            transforms.ColorJitter(
-                brightness=0.2, contrast=0.2, saturation=0.1, hue=0.0
-            ), # maodificari de limizozitate/contrats/saturatioe
-            transforms.GaussianBlur(3, sigma=(0.1, 0.5)), # blur gaussian pt imagini(pt imaginile mia neclare)
-            transforms.ToTensor(), # transforma imaginea in tensor(din 0-255 in 0-1)
+                img_size, scale=(0.8, 1.0), ratio=(0.9, 1.1)
+            ),
+            # Doar luminozitate și contrast (fără saturație/hue pe imagini gri)
+            transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            # Sharpness ajută la evidențierea straturilor retinei
+            transforms.RandomAdjustSharpness(sharpness_factor=2, p=0.3),
+            # Blur pentru a simula scanări de calitate slabă
+            transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 0.5)),
+            transforms.ToTensor(),
             normalize,
-            transforms.RandomErasing(
-                p=0.1, scale=(0.02, 0.15), ratio=(0.3, 3.3), value="random"
-            ),  # fortam modelul sa nu se bazeze pe o singura zona
+            # RandomErasing forțează modelul să nu ignore periferia imaginii
+            transforms.RandomErasing(p=0.2, scale=(0.02, 0.1), ratio=(0.3, 3.3), value=0),
         ])
 
     return transforms.Compose([
