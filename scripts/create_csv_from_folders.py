@@ -4,8 +4,8 @@ from pathlib import Path
 
 IMG_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 
-data_root = Path("data/raw") # datasetul
-out_dir = Path("data/splits") # unde se salveaza
+data_root = Path("data/old/raw") # datasetul
+out_dir = Path("data/old/splits") # unde se salveaza
 out_dir.mkdir(parents=True, exist_ok=True)
 
 
