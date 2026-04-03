@@ -5,6 +5,7 @@
 # Data / images
 data/
 experiments/**/checkpoints/*.pth
+models/
 
 
 # Python
