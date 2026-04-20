@@ -33,9 +33,10 @@ from sklearn.metrics import (
 from tqdm import tqdm
 from transformers import AutoModel, AutoProcessor, BertTokenizer
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from src.models.cnn_resnet18 import ResNet18OCT
+from src.datasets.oct_dataset import OCTDataset, get_transforms
 
-from src.utils.seed import set_seed, SEED
+from ...utils.seed import set_seed, SEED
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -97,9 +98,6 @@ def eval_cnn():
     print(f"\n{'─' * 50}")
     print("  EVAL: CNN ResNet18 Baseline")
     print(f"{'─' * 50}")
-
-    from src.models.cnn_resnet18 import ResNet18OCT
-    from src.datasets.oct_dataset import OCTDataset, get_transforms
 
     if not os.path.exists(cfg.cnn_checkpoint):
         print(f"  SKIP: checkpoint nu există ({cfg.cnn_checkpoint})")

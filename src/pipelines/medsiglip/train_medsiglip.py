@@ -105,6 +105,10 @@ class MedSigLIPContrastive(nn.Module):
 
     def encode_image(self, pixel_values):
         outputs = self.model.get_image_features(pixel_values=pixel_values)
+        if hasattr(outputs, "pooler_output"):
+            outputs = outputs.pooler_output
+        elif hasattr(outputs, "last_hidden_state"):
+            outputs = outputs.last_hidden_state[:, 0]
         return F.normalize(outputs, p=2, dim=-1)
 
     def encode_text(self, input_ids, attention_mask):
@@ -112,6 +116,10 @@ class MedSigLIPContrastive(nn.Module):
             input_ids=input_ids,
             attention_mask=attention_mask,
         )
+        if hasattr(outputs, "pooler_output"):
+            outputs = outputs.pooler_output
+        elif hasattr(outputs, "last_hidden_state"):
+            outputs = outputs.last_hidden_state[:, 0]
         return F.normalize(outputs, p=2, dim=-1)
 
     def forward(self, pixel_values, input_ids, attention_mask):
@@ -318,8 +326,7 @@ def main():
     processor = AutoProcessor.from_pretrained(cfg.model_path)
 
     # data
-    loaders = get_medsiglip_loaders(processor, cfg)
-    train_dl, val_dl = loaders.get("train"), loaders.get("val")
+    train_dl, val_dl, test_dl = get_medsiglip_loaders(processor, cfg)
 
     if train_dl is None or val_dl is None:
         raise RuntimeError("Train sau val loader lipsește!")
