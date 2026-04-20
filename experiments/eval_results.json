@@ -1,0 +1,111 @@
+[
+  {
+    "model": "CNN ResNet18",
+    "dataset": "old (4 classes)",
+    "accuracy": 95.43,
+    "f1_macro": 0.9543,
+    "classification_report": {
+      "AMD": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 350
+      },
+      "DME": {
+        "precision": 0.9582089552238806,
+        "recall": 0.9171428571428571,
+        "f1-score": 0.9372262773722628,
+        "support": 350
+      },
+      "DRUSEN": {
+        "precision": 0.9466292134831461,
+        "recall": 0.9628571428571429,
+        "f1-score": 0.9546742209631728,
+        "support": 350
+      },
+      "NORMAL": {
+        "precision": 0.9136490250696379,
+        "recall": 0.9371428571428572,
+        "f1-score": 0.9252468265162199,
+        "support": 350
+      },
+      "accuracy": 0.9542857142857143,
+      "macro avg": {
+        "precision": 0.9546217984441662,
+        "recall": 0.9542857142857143,
+        "f1-score": 0.9542868312129139,
+        "support": 1400
+      },
+      "weighted avg": {
+        "precision": 0.9546217984441662,
+        "recall": 0.9542857142857143,
+        "f1-score": 0.9542868312129139,
+        "support": 1400
+      }
+    }
+  },
+  {
+    "model": "SigLIP (scratch)",
+    "dataset": "old (4 classes)",
+    "avg_R@1": 90.53,
+    "I2T_R@1": 81.07,
+    "I2T_R@5": 81.07,
+    "I2T_R@10": 81.07,
+    "T2I_R@1": 100.0,
+    "T2I_R@5": 100.0,
+    "T2I_R@10": 100.0
+  },
+  {
+    "model": "MedSigLIP Multi-Task",
+    "dataset": "OCT5k (4 classes)",
+    "accuracy": 96.5,
+    "f1_macro": 0.9738,
+    "avg_R@1": 77.91,
+    "severity_mae": 11.62,
+    "classification_report": {
+      "AMD": {
+        "precision": 0.9649805447470817,
+        "recall": 0.96875,
+        "f1-score": 0.9668615984405458,
+        "support": 256
+      },
+      "DME": {
+        "precision": 0.9709302325581395,
+        "recall": 0.9766081871345029,
+        "f1-score": 0.9737609329446064,
+        "support": 171
+      },
+      "DRUSEN": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1-score": 1.0,
+        "support": 15
+      },
+      "NORMAL": {
+        "precision": 0.9586776859504132,
+        "recall": 0.9508196721311475,
+        "f1-score": 0.9547325102880658,
+        "support": 244
+      },
+      "accuracy": 0.9650145772594753,
+      "macro avg": {
+        "precision": 0.9736471158139086,
+        "recall": 0.9740444648164126,
+        "f1-score": 0.9738387604183045,
+        "support": 686
+      },
+      "weighted avg": {
+        "precision": 0.9649875285635504,
+        "recall": 0.9650145772594753,
+        "f1-score": 0.964991867703492,
+        "support": 686
+      }
+    },
+    "I2T_R@1": 81.78,
+    "I2T_R@5": 97.96,
+    "I2T_R@10": 99.85,
+    "T2I_R@1": 74.05,
+    "T2I_R@5": 89.65,
+    "T2I_R@10": 94.17
+  }
+]

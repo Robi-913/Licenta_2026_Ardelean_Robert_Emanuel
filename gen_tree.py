@@ -1,7 +1,17 @@
 import os
 
-SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".conda", ".idea",".gitattributes", ".gitignore"}
+SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".conda", ".idea", ".gitattributes", ".gitignore"}
 SKIP_EXT = {".jpg", ".jpeg"}
+
+SKIP_CONTENTS = {
+    "Boundaries",
+    "Detection",
+    "Images",
+    "Masks",
+    "metadata",
+    "prompts",
+    "Scripts",
+    "splits"}
 
 
 def build_tree(folder, prefix, result):
@@ -20,7 +30,8 @@ def build_tree(folder, prefix, result):
         branch = "└── " if last else "├── "
         result.append(prefix + branch + name)
 
-        if os.path.isdir(full_path):
+        # dacă e folder și NU e în lista de skip contents, intră în el
+        if os.path.isdir(full_path) and name not in SKIP_CONTENTS:
             spacer = "    " if last else "│   "
             build_tree(full_path, prefix + spacer, result)
 
