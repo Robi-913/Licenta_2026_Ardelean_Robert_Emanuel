@@ -1,0 +1,92 @@
+_wandb:
+    value:
+        cli_version: 0.26.1
+        e:
+            afh0dced0bw8wybmekhtrw0txd2ncwib:
+                cpu_count: 16
+                cpu_count_logical: 24
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "709636386816"
+                        used: "233127571456"
+                email: ardelean.ni.robert@student.utcluj.ro
+                executable: C:\Users\admdev\miniconda3\envs\Robert\python.exe
+                git:
+                    commit: a6b21003a9ddcd22f1a85e72c08dbd4ddf2da6be
+                    remote: https://github.com/Robi-913/Licenta_2026_Ardelean_Robert_Emanuel.git
+                gpu: NVIDIA GeForce RTX 3090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10496
+                      memoryTotal: "25769803776"
+                      name: NVIDIA GeForce RTX 3090
+                      uuid: GPU-c444380a-4ad2-8b0b-cb7b-52567c36e56f
+                host: Sistem36-4
+                memory:
+                    total: "34088464384"
+                os: Windows-10-10.0.26200-SP0
+                program: -m src.pipelines.medsiglip.train_medsiglip
+                python: CPython 3.10.20
+                root: D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel
+                startedAt: "2026-04-29T09:33:46.310529Z"
+                writerId: afh0dced0bw8wybmekhtrw0txd2ncwib
+        m: []
+        python_version: 3.10.20
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.10.20
+            "5": 0.26.1
+            "6": 5.5.4
+            "8":
+                - 3
+            "12": 0.26.1
+            "13": windows-amd64
+bs_effective:
+    value: 16
+dataset:
+    value: OCT5k
+epochs:
+    value: 30
+fusion_lr:
+    value: 5e-05
+head_lr:
+    value: 0.0001
+lambda_cls:
+    value: 0.3
+lambda_sev:
+    value: 0.3
+model:
+    value: models/medsiglip-448
+sev_activation:
+    value: clamp(0,1)
+sev_loss:
+    value: SmoothL1
+text_lr:
+    value: 1e-05
+version:
+    value: v3
+vision_lr:
+    value: 5e-06
+wd_bias_norm:
+    value: false

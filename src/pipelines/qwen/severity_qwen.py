@@ -9,52 +9,45 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# CONFIGURARE
-# ═══════════════════════════════════════════════════════════════════════
+# ---------- config ----------
 
 class Config:
     model_path = "models/qwen2.5-7b-instruct"
-    input_json = "data/oct5k/medgemma_prompts.json"      # prompturile originale complete
-    output_json = "data/oct5k/severity_scores.json"
+    src_json = "data/oct5k/medgemma_prompts.json"
+    out_json = "data/oct5k/severity_scores.json"
 
-    max_new_tokens = 250
-    max_retry = 2
+    max_tokens = 250
+    retries = 2
 
-    save_every = 50
+    save_interval = 50
     resume = True
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # pt NORMAL: severity random intre 0-10%
-    normal_severity_min = 0
-    normal_severity_max = 10
+    normal_min = 0
+    normal_max = 10
 
 
 cfg = Config()
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# INCARCARE MODEL
-# ═══════════════════════════════════════════════════════════════════════
+# ---------- model ----------
 
-def load_qwen():
+def load_model():
     print(f"\n  Model: {cfg.model_path}")
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-    model = AutoModelForCausalLM.from_pretrained(
+    tok = AutoTokenizer.from_pretrained(cfg.model_path)
+    mdl = AutoModelForCausalLM.from_pretrained(
         cfg.model_path,
         dtype=torch.bfloat16,
         device_map="auto",
     )
-    model.eval()
-    print(f"  VRAM: {torch.cuda.memory_allocated() / 1024**3:.1f} GB")
-    return model, tokenizer
+    mdl.eval()
+    print(f"  VRAM: {torch.cuda.memory_allocated() / 1024 ** 3:.1f} GB")
+    return mdl, tok
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# SYSTEM PROMPT - SEVERITY ESTIMATION
-# ═══════════════════════════════════════════════════════════════════════
+# ---------- system prompt ----------
 
-SYSTEM_PROMPT = (
+SYS_PROMPT = (
     "You are a retinal disease severity estimator for OCT scans.\n"
     "Analyze the description and estimate how severe the eye condition is.\n\n"
     "Consider these factors:\n"
@@ -78,130 +71,119 @@ SYSTEM_PROMPT = (
 )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# GENERARE SI PARSARE
-# ═══════════════════════════════════════════════════════════════════════
+# ---------- generation ----------
 
 @torch.no_grad()
-def _generate_once(model, tokenizer, original_prompt, retry_hint=""):
+def call_model(mdl, tok, description, extra=""):
     user_msg = (
         f"Analyze the severity of this OCT scan description:\n\n"
-        f"{original_prompt}\n\n"
+        f"{description}\n\n"
         f"Output exactly:\n"
         f"Reasoning: ...\n"
         f"Level: ...\n"
         f"Severity: ...%"
-        f"{retry_hint}"
+        f"{extra}"
     )
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+    msgs = [
+        {"role": "system", "content": SYS_PROMPT},
         {"role": "user", "content": user_msg},
     ]
 
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
-    input_len = inputs["input_ids"].shape[1]
+    text = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+    inputs = tok(text, return_tensors="pt").to(mdl.device)
+    prefix = inputs["input_ids"].shape[1]
 
-    out = model.generate(
+    out = mdl.generate(
         **inputs,
-        max_new_tokens=cfg.max_new_tokens,
+        max_new_tokens=cfg.max_tokens,
         do_sample=False,
         repetition_penalty=1.05,
-        pad_token_id=tokenizer.eos_token_id,
+        pad_token_id=tok.eos_token_id,
     )
 
-    return tokenizer.decode(out[0][input_len:], skip_special_tokens=True).strip()
+    return tok.decode(out[0][prefix:], skip_special_tokens=True).strip()
 
 
-def parse_severity(response):
-    """Extrage severity_percent, level si reasoning din raspunsul modelului."""
-    severity_percent = None
+# ---------- parsing ----------
+
+def parse(response):
+    sev = None
     level = None
-    reasoning = None
+    reason = None
 
     for line in response.split("\n"):
         line = line.strip()
+        low = line.lower()
 
-        # Cauta "Severity: XX%"
-        if line.lower().startswith("severity:"):
-            match = re.search(r'(\d+(?:\.\d+)?)\s*%', line)
-            if match:
-                severity_percent = float(match.group(1))
-                severity_percent = max(0, min(100, severity_percent))  # clamp 0-100
+        if low.startswith("severity:"):
+            m = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
+            if m:
+                sev = max(0, min(100, float(m.group(1))))
 
-        # Cauta "Level: Moderate" etc
-        elif line.lower().startswith("level:"):
+        elif low.startswith("level:"):
             level = line.split(":", 1)[1].strip()
 
-        # Cauta "Reasoning: ..."
-        elif line.lower().startswith("reasoning:"):
-            reasoning = line.split(":", 1)[1].strip()
+        elif low.startswith("reasoning:"):
+            reason = line.split(":", 1)[1].strip()
 
-    return severity_percent, level, reasoning
-
-
-def estimate_severity(model, tokenizer, original_prompt):
-    """Incearca sa extraga severity cu retry logic."""
-    best_response = None
-
-    for t in range(cfg.max_retry + 1):
-        hint = "\n\nRetry: Output EXACTLY 3 lines: Reasoning, Level, Severity." if t > 0 else ""
-        response = _generate_once(model, tokenizer, original_prompt, retry_hint=hint)
-        best_response = response
-
-        sev_pct, level, reasoning = parse_severity(response)
-
-        if sev_pct is not None:
-            return sev_pct, level or "Unknown", reasoning or "", True, []
-
-    # fallback: n-a reusit sa extraga un numar valid
-    return None, None, best_response, False, ["parse_failed"]
+    return sev, level, reason
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# SAVE
-# ═══════════════════════════════════════════════════════════════════════
+def score_one(mdl, tok, description):
+    last_raw = None
 
-def _save(results):
-    out = Path(cfg.output_json)
+    for t in range(cfg.retries + 1):
+        hint = ""
+        if t > 0:
+            hint = "\n\nRetry: Output EXACTLY 3 lines: Reasoning, Level, Severity."
+
+        raw = call_model(mdl, tok, description, extra=hint)
+        last_raw = raw
+
+        sev, level, reason = parse(raw)
+        if sev is not None:
+            return sev, level or "Unknown", reason or "", True, []
+
+    return None, None, last_raw, False, ["parse_failed"]
+
+
+# ---------- save ----------
+
+def save_out(data):
+    out = Path(cfg.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# MAIN LOOP
-# ═══════════════════════════════════════════════════════════════════════
+# ---------- main loop ----------
 
-def process_all(model, tokenizer, prompts_data):
-    # Resume logic
-    existing = {}
-    if cfg.resume and Path(cfg.output_json).exists():
-        with open(cfg.output_json, "r", encoding="utf-8") as f:
+def run_all(mdl, tok, data):
+    prev = {}
+    if cfg.resume and Path(cfg.out_json).exists():
+        with open(cfg.out_json, "r", encoding="utf-8") as f:
             old = json.load(f)
-        existing = {x["image_path"]: x for x in old if x.get("severity_valid") == True}
-        print(f"  Deja procesate valid: {len(existing)} imagini.")
+        prev = {x["image_path"]: x for x in old if x.get("severity_valid") is True}
+        print(f"  Already done: {len(prev)} images")
 
-    results = list(existing.values())
-    processed, errors = 0, 0
+    results = list(prev.values())
+    done = 0
+    n_err = 0
 
-    for i, item in enumerate(tqdm(prompts_data, desc="Severity scoring")):
+    for i, item in enumerate(tqdm(data, desc="Severity scoring")):
         path = item["image_path"]
         disease = item["disease_category"]
-        original = item["generated_prompt"]
+        desc = item["generated_prompt"]
 
-        # Skip daca deja procesat
-        if path in existing:
+        if path in prev:
             continue
 
-        # Skip daca promptul original e eroare
-        if not original or original.startswith("ERROR"):
+        if not desc or desc.startswith("ERROR"):
             continue
 
-        # NORMAL => severity random 0-10%, fara LLM
         if disease.upper() == "NORMAL":
-            sev = round(random.uniform(cfg.normal_severity_min, cfg.normal_severity_max), 1)
+            sev = round(random.uniform(cfg.normal_min, cfg.normal_max), 1)
             results.append({
                 "image_path": path,
                 "disease_category": disease,
@@ -213,87 +195,76 @@ def process_all(model, tokenizer, prompts_data):
             })
             continue
 
-        # Procesare cu Qwen pt AMD, DME, DRUSEN
         try:
-            sev_pct, level, reasoning, is_valid, issues = estimate_severity(
-                model, tokenizer, original
-            )
+            sev, level, reason, ok, issues = score_one(mdl, tok, desc)
         except Exception as e:
-            errors += 1
-            sev_pct, level, reasoning = None, None, str(e)
-            is_valid, issues = False, [f"exception:{str(e)}"]
+            n_err += 1
+            sev, level, reason = None, None, str(e)
+            ok, issues = False, [f"exception:{e}"]
 
         results.append({
             "image_path": path,
             "disease_category": disease,
-            "severity_percent": sev_pct,
+            "severity_percent": sev,
             "severity_level": level,
-            "severity_reasoning": reasoning,
-            "severity_valid": is_valid,
+            "severity_reasoning": reason,
+            "severity_valid": ok,
             "severity_issues": issues,
         })
-        processed += 1
+        done += 1
 
-        # Save periodic
-        if processed % cfg.save_every == 0:
-            _save(results)
-            tqdm.write(f"  💾 Saved {len(results)} | Processed: {processed} | Errors: {errors}")
+        if done % cfg.save_interval == 0:
+            save_out(results)
+            tqdm.write(f"  Saved {len(results)} | Done: {done} | Errors: {n_err}")
 
-    _save(results)
-    return results, errors
+    save_out(results)
+    return results, n_err
 
+
+# ---------- main ----------
 
 def main():
-    random.seed(42)  # reproducibilitate pt NORMAL
+    random.seed(42)
 
     print("=" * 70)
-    print("  STEP 3: SEVERITY SCORING CU QWEN2.5-7B-INSTRUCT (LOCAL)")
-    print("  Cost: 0 RON (ruleaza pe GPU local)")
+    print("  STEP 3: SEVERITY SCORING WITH QWEN2.5-7B-INSTRUCT (LOCAL)")
     print("=" * 70)
 
-    # Incarca prompturile originale (generated_prompt = textul complet)
-    with open(cfg.input_json, "r", encoding="utf-8") as f:
-        prompts_data = json.load(f)
+    with open(cfg.src_json, "r", encoding="utf-8") as f:
+        raw = json.load(f)
 
-    # Filtrare
-    valid_data = [p for p in prompts_data if not p["generated_prompt"].startswith("ERROR")]
-    print(f"  Total imagini: {len(prompts_data)}")
-    print(f"  Valide: {len(valid_data)}")
+    usable = [p for p in raw if not p["generated_prompt"].startswith("ERROR")]
+    print(f"  Total images: {len(raw)}")
+    print(f"  Usable: {len(usable)}")
 
-    normal_count = sum(1 for p in valid_data if p["disease_category"].upper() == "NORMAL")
-    disease_count = len(valid_data) - normal_count
-    print(f"  NORMAL (hardcoded 0-10%): {normal_count}")
-    print(f"  Disease (Qwen inference): {disease_count}")
-    print(f"  Timp estimat: ~{disease_count // 60} min pe RTX 3090")
+    n_normal = sum(1 for p in usable if p["disease_category"].upper() == "NORMAL")
+    n_disease = len(usable) - n_normal
+    print(f"  NORMAL (hardcoded 0-10%): {n_normal}")
+    print(f"  Disease (Qwen inference): {n_disease}")
+    print(f"  Estimated time: ~{n_disease // 60} min on RTX 3090")
 
-    # Incarca modelul
-    model, tokenizer = load_qwen()
+    mdl, tok = load_model()
+    results, n_err = run_all(mdl, tok, usable)
 
-    # Proceseaza
-    results, errors = process_all(model, tokenizer, valid_data)
-
-    # Statistici finale
-    valid_results = [r for r in results if r.get("severity_valid") == True]
-    levels = [r["severity_level"] for r in valid_results if r.get("severity_level")]
-    level_counts = dict(sorted(Counter(levels).items()))
+    good = [r for r in results if r.get("severity_valid") is True]
+    lvls = [r["severity_level"] for r in good if r.get("severity_level")]
+    lvl_dist = dict(sorted(Counter(lvls).items()))
 
     print("\n" + "=" * 70)
-    print(f"  FINAL RESULTS:")
-    print(f"  Total procesate: {len(results)}")
-    print(f"  Valide: {len(valid_results)}")
-    print(f"  Erori: {errors}")
-    print(f"  Distributie severity levels: {level_counts}")
+    print(f"  RESULTS:")
+    print(f"  Total: {len(results)}")
+    print(f"  Valid: {len(good)}")
+    print(f"  Errors: {n_err}")
+    print(f"  Level distribution: {lvl_dist}")
 
-    # Statistici per disease category
     for cat in ["NORMAL", "DRUSEN", "AMD", "DME"]:
-        cat_results = [r for r in valid_results if r["disease_category"].upper() == cat]
-        if cat_results:
-            sevs = [r["severity_percent"] for r in cat_results if r["severity_percent"] is not None]
-            if sevs:
-                avg_sev = sum(sevs) / len(sevs)
-                min_sev = min(sevs)
-                max_sev = max(sevs)
-                print(f"  {cat}: {len(cat_results)} img | avg: {avg_sev:.1f}% | min: {min_sev:.1f}% | max: {max_sev:.1f}%")
+        subset = [r for r in good if r["disease_category"].upper() == cat]
+        if not subset:
+            continue
+        sevs = [r["severity_percent"] for r in subset if r["severity_percent"] is not None]
+        if sevs:
+            avg = sum(sevs) / len(sevs)
+            print(f"  {cat}: {len(subset)} img | avg: {avg:.1f}% | min: {min(sevs):.1f}% | max: {max(sevs):.1f}%")
 
     print("=" * 70)
 

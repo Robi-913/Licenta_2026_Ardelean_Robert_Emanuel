@@ -1,0 +1,24 @@
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_setup.py:_flush():81] Current SDK version is 0.26.1
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_setup.py:_flush():81] Configure stats pid to 29664
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_init.py:setup_run_log_directory():723] Logging user logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260424_113203-cuqv6c4y\logs\debug.log
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_init.py:setup_run_log_directory():724] Logging internal logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260424_113203-cuqv6c4y\logs\debug-internal.log
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_init.py:init():850] calling init triggers
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_init.py:init():855] wandb.init called with sweep_config: {}
+config: {'model': 'models/medsiglip-448', 'bs_effective': 16, 'epochs': 30, 'vision_lr': 5e-06, 'text_lr': 1e-05, 'head_lr': 0.0001, 'lambda_sev': 0.3, 'lambda_cls': 0.3, 'dataset': 'OCT5k', 'version': 'v2', '_wandb': {}}
+2026-04-24 11:32:03,554 INFO    MainThread:29664 [wandb_init.py:init():898] starting backend
+2026-04-24 11:32:05,913 INFO    MainThread:29664 [wandb_init.py:init():913] sending inform_init request
+2026-04-24 11:32:06,725 INFO    MainThread:29664 [wandb_init.py:init():918] backend started and connected
+2026-04-24 11:32:06,726 INFO    MainThread:29664 [wandb_init.py:init():988] updated telemetry
+2026-04-24 11:32:06,750 INFO    MainThread:29664 [wandb_init.py:init():1011] communicating run to backend with 90.0 second timeout
+2026-04-24 11:32:07,569 INFO    MainThread:29664 [wandb_init.py:init():1056] starting run threads in backend
+2026-04-24 11:32:07,765 INFO    MainThread:29664 [wandb_run.py:_console_start():2554] atexit reg
+2026-04-24 11:32:07,766 INFO    MainThread:29664 [wandb_run.py:_redirect():2403] redirect: wrap_raw
+2026-04-24 11:32:07,766 INFO    MainThread:29664 [wandb_run.py:_redirect():2472] Wrapping output streams.
+2026-04-24 11:32:07,766 INFO    MainThread:29664 [wandb_run.py:_redirect():2495] Redirects installed.
+2026-04-24 11:32:07,769 INFO    MainThread:29664 [wandb_init.py:init():1094] run started, returning control to user process
+2026-04-24 21:53:13,475 INFO    MainThread:29664 [wandb_run.py:_finish():2321] finishing run robi913-technical-university-of-cluj-napoca/licenta-medsiglip/cuqv6c4y
+2026-04-24 21:53:13,478 INFO    MainThread:29664 [wandb_run.py:_atexit_cleanup():2520] got exitcode: 0
+2026-04-24 21:53:13,479 INFO    MainThread:29664 [wandb_run.py:_restore():2502] restore
+2026-04-24 21:53:13,479 INFO    MainThread:29664 [wandb_run.py:_restore():2508] restore done
+2026-04-24 21:53:14,854 INFO    MainThread:29664 [wandb_run.py:_footer_sync_info():3889] logging synced files

@@ -11,17 +11,19 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 from ...utils.seed import set_seed
 
 
+# ---------- config ----------
+
 class Config:
     model_path = "models/qwen2.5-7b-instruct"
-    input_json = "data/oct5k/medgemma_prompts.json"
-    output_json = "data/oct5k/medgemma_prompts_split.json"
+    src_json = "data/oct5k/medgemma_prompts.json"
+    out_json = "data/oct5k/medgemma_prompts_split.json"
 
-    max_new_tokens = 300
-    max_words_a = 50
-    max_words_b = 50
-    max_retry = 2
+    max_tokens = 300
+    limit_a = 50
+    limit_b = 50
+    retries = 2
 
-    save_every = 50
+    save_interval = 50
     resume = True
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -29,19 +31,23 @@ class Config:
 cfg = Config()
 
 
-def load_medgemma():
+# ---------- model ----------
+
+def load_model():
     print(f"\n  Model: {cfg.model_path} (Text-Only Mode)")
-    processor = AutoProcessor.from_pretrained(cfg.model_path)
-    model = AutoModelForImageTextToText.from_pretrained(
+    proc = AutoProcessor.from_pretrained(cfg.model_path)
+    mdl = AutoModelForImageTextToText.from_pretrained(
         cfg.model_path,
         dtype=torch.bfloat16,
         device_map="auto",
     )
-    model.eval()
-    return model, processor
+    mdl.eval()
+    return mdl, proc
 
 
-SYSTEM_PROMPT = (
+# ---------- prompt construction ----------
+
+SYS_PROMPT = (
     "You are a strict text editor. Rewrite the following medical text into EXACTLY two short sentences for a raw grayscale OCT.\n"
     "RULES:\n"
     "1. Completely REMOVE the words 'mask', 'segmentation', and all colors (e.g., blue, yellow, green, cyan, light, dark).\n"
@@ -52,10 +58,10 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_split_request(long_prompt):
+def make_request(long_text):
     return (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"Source Text:\n{long_prompt}\n\n"
+        f"{SYS_PROMPT}\n\n"
+        f"Source Text:\n{long_text}\n\n"
         f"Instructions:\n"
         f"- PROMPT_A: Summarize ONLY the layer structure and thicknesses (max 45 words).\n"
         f"- PROMPT_B: Summarize ONLY the anomalies, lesions, and deformations (max 45 words).\n\n"
@@ -63,161 +69,196 @@ def build_split_request(long_prompt):
     )
 
 
+# ---------- generation ----------
+
 @torch.no_grad()
-def _generate_once(model, processor, long_prompt, retry_hint=""):
-    text_prompt = build_split_request(long_prompt) + retry_hint
+def call_model(mdl, proc, long_text, extra=""):
+    full = make_request(long_text) + extra
 
-    # Format pur textual pentru MedGemma
-    messages = [{"role": "user", "content": [{"type": "text", "text": text_prompt}]}]
+    msgs = [{"role": "user", "content": [{"type": "text", "text": full}]}]
 
-    inputs = processor.apply_chat_template(
-        messages,
+    inputs = proc.apply_chat_template(
+        msgs,
         tokenize=True,
         return_dict=True,
         return_tensors="pt",
         add_generation_prompt=True,
     )
 
-    model_inputs = {k: inputs[k].to(model.device) for k in ["input_ids", "attention_mask"] if k in inputs}
-    input_len = inputs["input_ids"].shape[1]
+    prefix = inputs["input_ids"].shape[1]
+    feed = {k: inputs[k].to(mdl.device) for k in ["input_ids", "attention_mask"] if k in inputs}
 
-    out = model.generate(
-        **model_inputs,
-        max_new_tokens=cfg.max_new_tokens,
+    out = mdl.generate(
+        **feed,
+        max_new_tokens=cfg.max_tokens,
         do_sample=False,
         repetition_penalty=1.05,
-        pad_token_id=processor.tokenizer.eos_token_id,
+        pad_token_id=proc.tokenizer.eos_token_id,
     )
 
-    return processor.decode(out[0][input_len:], skip_special_tokens=True).strip()
+    return proc.decode(out[0][prefix:], skip_special_tokens=True).strip()
 
 
-def _clean_line(s: str) -> str:
+# ---------- parsing / validation ----------
+
+def clean(s):
     s = " ".join((s or "").split())
     s = re.sub(r"\s+([,.;:])", r"\1", s)
     return s.strip()
 
 
-def parse_split(response, long_prompt):
-    prompt_a, prompt_b = "", ""
+def parse_response(response, fallback):
+    pa, pb = "", ""
 
     for line in response.split("\n"):
         line = line.strip()
-        if line.upper().startswith("PROMPT_A:"):
-            prompt_a = line[len("PROMPT_A:"):].strip()
-        elif line.upper().startswith("PROMPT_B:"):
-            prompt_b = line[len("PROMPT_B:"):].strip()
+        upper = line.upper()
+        if upper.startswith("PROMPT_A:"):
+            pa = line[len("PROMPT_A:"):].strip()
+        elif upper.startswith("PROMPT_B:"):
+            pb = line[len("PROMPT_B:"):].strip()
 
-    if not prompt_a or not prompt_b:
-        words = long_prompt.split()
+    if not pa or not pb:
+        words = fallback.split()
         mid = max(1, len(words) // 2)
-        if not prompt_a: prompt_a = " ".join(words[:mid])
-        if not prompt_b: prompt_b = " ".join(words[mid:])
+        if not pa:
+            pa = " ".join(words[:mid])
+        if not pb:
+            pb = " ".join(words[mid:])
 
-    prompt_a = _clean_line(" ".join(prompt_a.split()[:cfg.max_words_a]))
-    prompt_b = _clean_line(" ".join(prompt_b.split()[:cfg.max_words_b]))
+    pa = clean(" ".join(pa.split()[:cfg.limit_a]))
+    pb = clean(" ".join(pb.split()[:cfg.limit_b]))
 
-    return prompt_a, prompt_b
-
-
-def validate_split(prompt_a, prompt_b):
-    issues = []
-    if not prompt_a: issues.append("empty_a")
-    if not prompt_b: issues.append("empty_b")
-    if len(prompt_a.split()) > cfg.max_words_a: issues.append("a_too_long")
-    if len(prompt_b.split()) > cfg.max_words_b: issues.append("b_too_long")
-
-    banned_medical = ["treatment", "operation", "surgery", "prognosis", "intervention", "severity"]
-    if any(w in prompt_a.lower() for w in banned_medical): issues.append("a_has_medical_opinion")
-    if any(w in prompt_b.lower() for w in banned_medical): issues.append("b_has_medical_opinion")
-
-    banned_visuals = ["mask", "segmentation", "color", "colored", "blue", "green", "yellow", "red", "cyan", "turquoise",
-                      "navy", "cream", "hue", "band", "light", "dark"]
-    a_words = set(re.findall(r'\b\w+\b', prompt_a.lower()))
-    b_words = set(re.findall(r'\b\w+\b', prompt_b.lower()))
-
-    if any(w in a_words for w in banned_visuals): issues.append("a_has_color_or_mask_ref")
-    if any(w in b_words for w in banned_visuals): issues.append("b_has_color_or_mask_ref")
-
-    return len(issues) == 0, issues
+    return pa, pb
 
 
-def split_prompt(model, processor, long_prompt):
-    best = None
-    best_issues = None
-
-    for t in range(cfg.max_retry + 1):
-        hint = "\n\nRetry: Follow the PROMPT_A and PROMPT_B format strictly and remove all color/mask words." if t > 0 else ""
-        response = _generate_once(model, processor, long_prompt, retry_hint=hint)
-        a, b = parse_split(response, long_prompt)
-        valid, issues = validate_split(a, b)
-
-        best = (a, b, response)
-        best_issues = issues
-        if valid:
-            return a, b, True, []
-
-    return best[0], best[1], False, best_issues
+BANNED_MED = ["treatment", "operation", "surgery", "prognosis", "intervention", "severity"]
+BANNED_VIS = [
+    "mask", "segmentation", "color", "colored",
+    "blue", "green", "yellow", "red", "cyan", "turquoise",
+    "navy", "cream", "hue", "band", "light", "dark",
+]
 
 
-def _save(results):
-    out = Path(cfg.output_json)
+def check(pa, pb):
+    problems = []
+
+    if not pa:
+        problems.append("empty_a")
+    if not pb:
+        problems.append("empty_b")
+    if len(pa.split()) > cfg.limit_a:
+        problems.append("a_too_long")
+    if len(pb.split()) > cfg.limit_b:
+        problems.append("b_too_long")
+
+    if any(w in pa.lower() for w in BANNED_MED):
+        problems.append("a_has_medical_opinion")
+    if any(w in pb.lower() for w in BANNED_MED):
+        problems.append("b_has_medical_opinion")
+
+    wa = set(re.findall(r"\b\w+\b", pa.lower()))
+    wb = set(re.findall(r"\b\w+\b", pb.lower()))
+
+    if wa & set(BANNED_VIS):
+        problems.append("a_has_color_or_mask_ref")
+    if wb & set(BANNED_VIS):
+        problems.append("b_has_color_or_mask_ref")
+
+    return len(problems) == 0, problems
+
+
+def do_split(mdl, proc, long_text):
+    best_a, best_b = "", ""
+    best_problems = None
+
+    for attempt in range(cfg.retries + 1):
+        hint = ""
+        if attempt > 0:
+            hint = "\n\nRetry: Follow the PROMPT_A and PROMPT_B format strictly and remove all color/mask words."
+
+        raw = call_model(mdl, proc, long_text, extra=hint)
+        pa, pb = parse_response(raw, long_text)
+        ok, problems = check(pa, pb)
+
+        best_a, best_b = pa, pb
+        best_problems = problems
+
+        if ok:
+            return pa, pb, True, []
+
+    return best_a, best_b, False, best_problems
+
+
+# ---------- batch processing ----------
+
+def save_out(data):
+    out = Path(cfg.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2, ensure_ascii=False)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def process_all(model, processor, prompts_data):
-    existing = {}
-    if cfg.resume and Path(cfg.output_json).exists():
-        with open(cfg.output_json, "r", encoding="utf-8") as f:
+def run_all(mdl, proc, data):
+    prev = {}
+    if cfg.resume and Path(cfg.out_json).exists():
+        with open(cfg.out_json, "r", encoding="utf-8") as f:
             old = json.load(f)
-        existing = {x["image_path"]: x for x in old if "image_path" in x}
+        prev = {x["image_path"]: x for x in old if "image_path" in x}
 
-    results, skipped, errors = [], 0, 0
+    results = []
+    n_skip = 0
+    n_err = 0
 
-    for i, item in enumerate(tqdm(prompts_data, desc="Split prompturi")):
+    for i, item in enumerate(tqdm(data, desc="Splitting")):
         path = item["image_path"]
         disease = item["disease_category"]
-        long_prompt = item["generated_prompt"]
+        long_text = item["generated_prompt"]
 
-        if long_prompt.startswith("ERROR"): continue
-        if path in existing and existing[path].get("split_valid") == True:
-            results.append(existing[path])
-            skipped += 1
+        if long_text.startswith("ERROR"):
+            continue
+
+        cached = prev.get(path)
+        if cached and cached.get("split_valid") is True:
+            results.append(cached)
+            n_skip += 1
             continue
 
         try:
-            prompt_a, prompt_b, is_valid, issues = split_prompt(model, processor, long_prompt)
+            pa, pb, ok, problems = do_split(mdl, proc, long_text)
         except Exception as e:
-            errors += 1
-            prompt_a, prompt_b, is_valid, issues = "", "", False, [f"exception:{str(e)}"]
+            n_err += 1
+            pa, pb, ok, problems = "", "", False, [f"exception:{e}"]
 
         results.append({
             "image_path": path,
             "disease_category": disease,
-            "prompt_a": prompt_a,
-            "prompt_b": prompt_b,
-            "original_prompt": long_prompt,
-            "split_valid": is_valid,
-            "split_issues": issues,
+            "prompt_a": pa,
+            "prompt_b": pb,
+            "original_prompt": long_text,
+            "split_valid": ok,
+            "split_issues": problems,
         })
 
-        if (i + 1) % cfg.save_every == 0:
-            _save(results)
+        if (i + 1) % cfg.save_interval == 0:
+            save_out(results)
 
-    _save(results)
-    return results, errors, skipped
+    save_out(results)
+    return results, n_err, n_skip
 
+
+# ---------- main ----------
 
 def main():
     set_seed()
-    with open(cfg.input_json, "r", encoding="utf-8") as f:
-        prompts_data = json.load(f)
 
-    valid_data = [p for p in prompts_data if not p["generated_prompt"].startswith("ERROR")]
-    model, processor = load_medgemma()
-    results, errors, skipped = process_all(model, processor, valid_data)
+    with open(cfg.src_json, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+
+    usable = [p for p in raw if not p["generated_prompt"].startswith("ERROR")]
+
+    mdl, proc = load_model()
+    results, n_err, n_skip = run_all(mdl, proc, usable)
 
 
 if __name__ == "__main__":

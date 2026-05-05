@@ -1,93 +1,70 @@
-"""
-Dataset pt MedSigLIP multi-task cu DUAL prompts + severity target
-
-Returnează AMBELE prompturi tokenizate per imagine:
-  - input_ids_a, attention_mask_a  (prompt_a = structura)
-  - input_ids_b, attention_mask_b  (prompt_b = leziuni)
-  - severity                       (TARGET, nu input)
-  - label                          (clasa de boala)
-
-Modelul face:
-  emb_a = encode_text(prompt_a)
-  emb_b = encode_text(prompt_b)
-  merged = (emb_a + emb_b) / 2
-  contrastive_loss(image_emb, merged)
-"""
-
 import json
 import os
 
+import numpy as np
 import pandas as pd
 import torch
-from PIL import Image
+import torchvision.transforms as T
+from PIL import Image, ImageFilter
 from torch.utils.data import DataLoader, Dataset
 
 
-class OCT5kMedSigLIP(Dataset):
+class OCT5kDataset(Dataset):
 
-    def __init__(
-        self,
-        split_csv,
-        split_json,
-        severity_json,
-        processor,
-        image_dirs=None,
-        mode="train",
-    ):
+    def __init__(self, split_csv, split_json, severity_json, processor,
+                 img_dirs=None, mode="train"):
         self.processor = processor
         self.mode = mode
 
-        if image_dirs is None:
-            image_dirs = [
+        if img_dirs is None:
+            img_dirs = [
                 "data/OCT5k/Images/Images_Automatic",
                 "data/OCT5k/Images/Images_Manual",
                 "data/OCT5k/Detection/Images",
             ]
-        self.image_dirs = image_dirs
+        self.img_dirs = img_dirs
 
         self.df = pd.read_csv(split_csv)
 
-        # prompturi split
         with open(split_json, "r", encoding="utf-8") as f:
-            split_list = json.load(f)
+            raw_splits = json.load(f)
 
-        self.split_prompts = {}
-        for item in split_list:
-            if item.get("split_valid") == True:
-                self.split_prompts[item["image_path"]] = {
-                    "a": item["prompt_a"],
-                    "b": item["prompt_b"],
+        self.prompts = {}
+        for entry in raw_splits:
+            if entry.get("split_valid") is True:
+                self.prompts[entry["image_path"]] = {
+                    "a": entry["prompt_a"],
+                    "b": entry["prompt_b"],
                 }
 
-        # severity scores
         with open(severity_json, "r", encoding="utf-8") as f:
-            sev_list = json.load(f)
+            raw_sev = json.load(f)
 
-        self.severity = {}
-        for item in sev_list:
-            if item.get("severity_valid") == True and item.get("severity_percent") is not None:
-                self.severity[item["image_path"]] = item["severity_percent"]
+        self.sev = {}
+        for entry in raw_sev:
+            pct = entry.get("severity_percent")
+            if entry.get("severity_valid") is True and pct is not None:
+                self.sev[entry["image_path"]] = pct
 
-        # filtram doar ce are ambele
-        valid = set(self.split_prompts.keys()) & set(self.severity.keys())
-        self.df = self.df[self.df["image_path"].isin(valid)].reset_index(drop=True)
+        usable = set(self.prompts.keys()) & set(self.sev.keys())
+        self.df = self.df[self.df["image_path"].isin(usable)].reset_index(drop=True)
 
         self.classes = sorted(self.df["disease"].unique())
-        self.label_to_int = {name: i for i, name in enumerate(self.classes)}
-        self.num_classes = len(self.classes)
+        self.lbl_map = {name: i for i, name in enumerate(self.classes)}
+        self.n_classes = len(self.classes)
 
         print(
-            f"  OCT5kMedSigLIP [{mode}]: {len(self.df)} imagini, "
-            f"{self.num_classes} clase: {self.classes}"
+            f"  OCT5k [{mode}]: {len(self.df)} images, "
+            f"{self.n_classes} classes: {self.classes}"
         )
 
     def __len__(self):
         return len(self.df)
 
-    def _find_image(self, rel_path):
-        normalized = rel_path.replace("\\", "/")
-        for base in self.image_dirs:
-            full = os.path.join(base, normalized)
+    def _locate(self, rel):
+        norm = rel.replace("\\", "/")
+        for base in self.img_dirs:
+            full = os.path.join(base, norm)
             if os.path.exists(full):
                 return full
             for ext in [".png", ".jpeg", ".jpg"]:
@@ -96,59 +73,87 @@ class OCT5kMedSigLIP(Dataset):
                     return alt
         return None
 
-    def _tokenize_text(self, text):
-        tok = self.processor.tokenizer(
+    def _auto_crop(self, img, threshold=35):
+        """Taie marginile negre automat, pastreaza zona cu continut retinian."""
+        arr = np.array(img.convert("L"))
+        mask = arr > threshold
+
+        rows = mask.any(axis=1)
+        cols = mask.any(axis=0)
+
+        if rows.any() and cols.any():
+            y1 = int(rows.argmax())
+            y2 = int(len(rows) - rows[::-1].argmax())
+            x1 = int(cols.argmax())
+            x2 = int(len(cols) - cols[::-1].argmax())
+
+            pad = 5
+            y1 = max(0, y1 - pad)
+            x1 = max(0, x1 - pad)
+            y2 = min(arr.shape[0], y2 + pad)
+            x2 = min(arr.shape[1], x2 + pad)
+
+            if (x2 - x1) > 50 and (y2 - y1) > 50:
+                img = img.crop((x1, y1, x2, y2))
+
+        return img
+
+    def _tok(self, text):
+        enc = self.processor.tokenizer(
             text,
             padding="max_length",
             truncation=True,
             max_length=64,
             return_tensors="pt",
         )
-        ids = tok["input_ids"].squeeze(0)
-        mask = tok.get("attention_mask", torch.ones_like(ids)).squeeze(0)
+        ids = enc["input_ids"].squeeze(0)
+        mask = enc.get("attention_mask", torch.ones_like(ids)).squeeze(0)
         return ids, mask
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         img_path = row["image_path"]
-        label = self.label_to_int[row["disease"]]
+        label = self.lbl_map[row["disease"]]
 
-        # imagine
-        disk_path = self._find_image(img_path)
-        if disk_path is None:
-            disk_path = row.get("image_disk_path", "")
-            if not os.path.exists(disk_path):
-                raise FileNotFoundError(f"Nu gasesc: {img_path}")
+        disk = self._locate(img_path)
+        if disk is None:
+            disk = row.get("image_disk_path", "")
+            if not os.path.exists(disk):
+                raise FileNotFoundError(f"Cannot find: {img_path}")
 
-        image = Image.open(disk_path).convert("RGB")
+        img = Image.open(disk).convert("RGB")
 
-        # procesam imaginea
-        img_inputs = self.processor(
-            images=image,
-            return_tensors="pt",
-        )
-        pixel_values = img_inputs["pixel_values"].squeeze(0)
+        # 1. denoise INTAI — reduce speckle noise
+        img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
 
-        # tokenizam AMBELE prompturi separat
-        prompts = self.split_prompts[img_path]
-        ids_a, mask_a = self._tokenize_text(prompts["a"])
-        ids_b, mask_b = self._tokenize_text(prompts["b"])
+        # 2. auto-crop DUPA — masca detecteaza mai curat fara noise
+        img = self._auto_crop(img)
 
-        # severity normalizat 0-1 (TARGET)
-        severity = self.severity[img_path] / 100.0
+        # 3. flip doar la train
+        if self.mode == "train":
+            img = T.RandomHorizontalFlip(p=0.5)(img)
+
+        px = self.processor(images=img, return_tensors="pt")
+        pixels = px["pixel_values"].squeeze(0)
+
+        pair = self.prompts[img_path]
+        ids_a, mask_a = self._tok(pair["a"])
+        ids_b, mask_b = self._tok(pair["b"])
+
+        sev = self.sev[img_path] / 100.0
 
         return {
-            "pixel_values": pixel_values,
+            "pixel_values": pixels,
             "input_ids_a": ids_a,
             "attention_mask_a": mask_a,
             "input_ids_b": ids_b,
             "attention_mask_b": mask_b,
             "label": label,
-            "severity": torch.tensor(severity, dtype=torch.float32),
+            "severity": torch.tensor(sev, dtype=torch.float32),
         }
 
 
-def collate_medsiglip(batch):
+def collate_oct5k(batch):
     return {
         "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
         "input_ids_a": torch.stack([b["input_ids_a"] for b in batch]),
@@ -160,30 +165,32 @@ def collate_medsiglip(batch):
     }
 
 
-def get_medsiglip_loaders(processor, cfg):
-    loaders = {}
+def make_loaders(processor, cfg):
+    out = {}
+
     for split in ["train", "val", "test"]:
-        csv_path = os.path.join(cfg.splits_dir, f"{split}.csv")
-        if not os.path.exists(csv_path):
-            print(f"  WARNING: {csv_path} nu exista, skip {split}")
+        csv = os.path.join(cfg.splits_dir, f"{split}.csv")
+        if not os.path.exists(csv):
+            print(f"  WARNING: {csv} missing, skipping {split}")
             continue
 
-        ds = OCT5kMedSigLIP(
-            split_csv=csv_path,
+        ds = OCT5kDataset(
+            split_csv=csv,
             split_json=cfg.split_json,
             severity_json=cfg.severity_json,
             processor=processor,
             mode="train" if split == "train" else "eval",
         )
 
-        loaders[split] = DataLoader(
+        is_train = split == "train"
+        out[split] = DataLoader(
             ds,
             batch_size=cfg.bs,
-            shuffle=(split == "train"),
+            shuffle=is_train,
             num_workers=cfg.workers,
             pin_memory=True,
-            collate_fn=collate_medsiglip,
-            drop_last=(split == "train"),
+            collate_fn=collate_oct5k,
+            drop_last=is_train,
         )
 
-    return loaders.get("train"), loaders.get("val"), loaders.get("test")
+    return out.get("train"), out.get("val"), out.get("test")
