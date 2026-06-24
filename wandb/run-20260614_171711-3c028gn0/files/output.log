@@ -1,0 +1,25 @@
+  OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 749, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 599, in main
+    train_ds, train_dl = make_train_loader_weighted(proc, cfg)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 272, in make_train_loader_weighted
+    print(f"  Train: {len(ds)} imagini ({n_bbox} cu bbox, weight={cfg.bbox_weight}x)")
+NameError: name 'n_bbox' is not defined
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 749, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 599, in main
+    train_ds, train_dl = make_train_loader_weighted(proc, cfg)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 272, in make_train_loader_weighted
+    print(f"  Train: {len(ds)} imagini ({n_bbox} cu bbox, weight={cfg.bbox_weight}x)")
+NameError: name 'n_bbox' is not defined

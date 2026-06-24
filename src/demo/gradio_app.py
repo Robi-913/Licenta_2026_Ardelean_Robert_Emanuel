@@ -1,5 +1,5 @@
 """
-Gradio Demo: MedSigLIP v3 OCT Analyzer
+Gradio Demo: MedSigLIP v7 OCT Analyzer
 EigenCAM + Cross-Attention Fusion + Dual Contrastive
 
 Rulare:
@@ -29,12 +29,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 # ---------- config ----------
 
-MDL_PATH = "models/medsiglip-448"
-CKPT_PATH = "experiments/medsiglip_v3/ckpts/best.pth"
-SPLIT_JSON = "data/oct5k/medgemma_prompts_split.json"
-SEV_JSON = "data/oct5k/severity_scores.json"
+MDL_PATH   = "models/medsiglip-448"
+CKPT_PATH  = "experiments/medsiglip_v7/ckpts/best.pth"
+SPLIT_JSON = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
+SEV_JSON   = "data/OCT5k/severity_scores_v2.json"
 
-DEV = "cuda" if torch.cuda.is_available() else "cpu"
+DEV       = "cuda" if torch.cuda.is_available() else "cpu"
 CLS_NAMES = ["AMD", "DME", "DRUSEN", "NORMAL"]
 
 
@@ -44,8 +44,9 @@ class CrossAttentionFusion(nn.Module):
 
     def __init__(self, dim, heads=4, dropout=0.1):
         super().__init__()
-        self.attn_a2b = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.attn_b2a = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+        # v7 checkpoint are attn_a2b/attn_b2a — rename la load
+        self.attn_oct2mask = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
+        self.attn_mask2oct = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
         self.norm = nn.LayerNorm(dim)
         self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
         self.proj = nn.Sequential(
@@ -55,8 +56,8 @@ class CrossAttentionFusion(nn.Module):
     def forward(self, emb_a, emb_b):
         a = emb_a.unsqueeze(1)
         b = emb_b.unsqueeze(1)
-        attn_a, _ = self.attn_a2b(query=a, key=b, value=b)
-        attn_b, _ = self.attn_b2a(query=b, key=a, value=a)
+        attn_a, _ = self.attn_oct2mask(query=a, key=b, value=b)
+        attn_b, _ = self.attn_mask2oct(query=b, key=a, value=a)
         attn_a = attn_a.squeeze(1)
         attn_b = attn_b.squeeze(1)
         g = self.gate(torch.cat([attn_a, attn_b], dim=-1))
@@ -106,7 +107,7 @@ class MedSigLIPMultiTask(nn.Module):
         return F.normalize(out, p=2, dim=-1)
 
     def forward(self, pixel_values):
-        """Forward pt EigenCAM — fara normalize, raw logits."""
+        """Forward pt EigenCAM — raw logits."""
         out = self.backbone.get_image_features(pixel_values=pixel_values)
         if hasattr(out, "pooler_output"):
             emb = out.pooler_output
@@ -134,7 +135,6 @@ def reshape_transform(tensor, height=32, width=32):
 
 
 def smooth_cam(grayscale_cam, kernel_size=31, threshold_pct=0.35):
-    """Blur + threshold pt aspect medical curat."""
     smoothed = cv2.GaussianBlur(grayscale_cam, (kernel_size, kernel_size), 0)
     lo, hi = smoothed.min(), smoothed.max()
     if hi - lo > 1e-8:
@@ -168,21 +168,37 @@ def auto_crop(img, threshold=35):
     return img
 
 
-# ---------- load model + eigencam + retrieval db ----------
+# ---------- normalize path pt lookup ----------
+
+def norm_path(p):
+    """Normalizeaza path la backslash consistent pt lookup."""
+    return p.replace("/", "\\")
+
+
+# ---------- load model ----------
 
 print("Loading model...")
 proc = AutoProcessor.from_pretrained(MDL_PATH)
 
-ckpt = torch.load(CKPT_PATH, map_location="cpu", weights_only=False)
-nc = ckpt.get("num_classes", 4)
+ckpt    = torch.load(CKPT_PATH, map_location="cpu", weights_only=False)
+nc      = ckpt.get("num_classes", 4)
 classes = ckpt.get("classes", CLS_NAMES)
 
 model = MedSigLIPMultiTask(MDL_PATH, n_classes=nc)
-model.load_state_dict(ckpt["model"])
+
+# rename keys: attn_a2b -> attn_oct2mask (v7 checkpoint compat)
+state_dict = {}
+for k, v in ckpt["model"].items():
+    if "fusion.attn_a2b" in k:
+        k = k.replace("fusion.attn_a2b", "fusion.attn_oct2mask")
+    elif "fusion.attn_b2a" in k:
+        k = k.replace("fusion.attn_b2a", "fusion.attn_mask2oct")
+    state_dict[k] = v
+model.load_state_dict(state_dict)
 model = model.to(DEV)
 model.eval()
 
-# EigenCAM setup
+# EigenCAM
 target_layers = [model.backbone.vision_model.encoder.layers[-2]]
 cam_gen = EigenCAM(
     model=model,
@@ -190,28 +206,55 @@ cam_gen = EigenCAM(
     reshape_transform=reshape_transform,
 )
 
+# ---------- load retrieval DB ----------
+
 print("Loading retrieval database...")
+
+# v2 format: dict cu image_path ca key, campuri "a" si "b"
 with open(SPLIT_JSON, "r", encoding="utf-8") as f:
     split_raw = json.load(f)
 
+# severity — keyed by image_path (normalizeaza paths)
 with open(SEV_JSON, "r", encoding="utf-8") as f:
-    sev_raw = json.load(f)
+    sev_list = json.load(f)
 
-sev_lookup = {
-    x["image_path"]: x
-    for x in sev_raw
-    if x.get("severity_valid")
-}
+sev_lookup = {}
+for x in sev_list:
+    if x.get("severity_valid"):
+        sev_lookup[norm_path(x["image_path"])] = x
 
 print("Precomputing text embeddings (cross-attention fusion)...")
 ret_db = []
 
-for item in split_raw:
-    if not item.get("split_valid"):
-        continue
+# detecteaza disease category din prompt (incepe cu numele bolii)
+DISEASE_MAP = {
+    "age-related": "AMD",
+    "diabetic":    "DME",
+    "drusen":      "DRUSEN",
+    "normal":      "NORMAL",
+}
 
-    pa = item["prompt_a"]
-    pb = item["prompt_b"]
+def detect_disease(prompt_a):
+    p = prompt_a.lower()
+    for kw, cls in DISEASE_MAP.items():
+        if p.startswith(kw):
+            return cls
+    # fallback: cauta in text
+    if "macular degeneration" in p or "amd" in p:
+        return "AMD"
+    if "diabetic" in p or "dme" in p:
+        return "DME"
+    if "drusen" in p:
+        return "DRUSEN"
+    if "normal" in p:
+        return "NORMAL"
+    return "UNKNOWN"
+
+for img_path, item in split_raw.items():
+    pa = item.get("a", "")
+    pb = item.get("b", "")
+    if not pa or not pb:
+        continue
 
     ta = proc.tokenizer(pa, padding="max_length", truncation=True, max_length=64, return_tensors="pt")
     tb = proc.tokenizer(pb, padding="max_length", truncation=True, max_length=64, return_tensors="pt")
@@ -223,15 +266,17 @@ for item in split_raw:
         eb = model.encode_text(tb["input_ids"].to(DEV), mb.to(DEV))
         merged = model.fusion(ea, eb)
 
-    sev_info = sev_lookup.get(item["image_path"], {})
+    path_norm = norm_path(img_path)
+    sev_info  = sev_lookup.get(path_norm, {})
+    disease   = detect_disease(pa)
 
     ret_db.append({
-        "emb": merged.cpu(),
+        "emb":      merged.cpu(),
         "prompt_a": pa,
         "prompt_b": pb,
-        "disease": item["disease_category"],
-        "path": item["image_path"],
-        "sev": sev_info.get("severity_percent"),
+        "disease":  disease,
+        "path":     img_path,
+        "sev":      sev_info.get("severity_percent"),
         "sev_level": sev_info.get("severity_level"),
     })
 
@@ -260,7 +305,6 @@ def analyze(image):
     if image is None:
         return None, "Upload an OCT image to analyze."
 
-    # preprocessing (same as training)
     pil = Image.fromarray(image).convert("RGB")
     pil = pil.filter(ImageFilter.GaussianBlur(radius=0.5))
     pil = auto_crop(pil)
@@ -268,34 +312,32 @@ def analyze(image):
     inputs = proc(images=pil, return_tensors="pt")
     pv = inputs["pixel_values"].to(DEV)
 
-    # classification + severity (cu normalize, ca la training)
     with torch.no_grad():
-        ie = model.encode_image(pv)
-        logits = model.cls_head(ie)
+        ie      = model.encode_image(pv)
+        logits  = model.cls_head(ie)
         sev_pct = model.sev_head(ie).clamp(0, 1).item() * 100
 
-    probs = torch.softmax(logits, dim=1)[0]
-    pred_i = probs.argmax().item()
+    probs    = torch.softmax(logits, dim=1)[0]
+    pred_i   = probs.argmax().item()
     pred_cls = classes[pred_i]
-    conf = probs[pred_i].item() * 100
-    per_cls = {classes[i]: float(probs[i]) for i in range(len(classes))}
+    conf     = probs[pred_i].item() * 100
+    per_cls  = {classes[i]: float(probs[i]) for i in range(len(classes))}
 
-    # EigenCAM heatmap
+    # EigenCAM
     rgb_resized = cv2.resize(np.array(pil), (448, 448))
-    rgb_float = np.float32(rgb_resized) / 255.0
+    rgb_float   = np.float32(rgb_resized) / 255.0
 
     grayscale_cam = cam_gen(input_tensor=pv, targets=None)[0, :]
     grayscale_cam = smooth_cam(grayscale_cam)
 
-    # masca fundal negru — heatmap doar pe retina
-    gray_img = cv2.cvtColor(rgb_resized, cv2.COLOR_RGB2GRAY)
+    gray_img    = cv2.cvtColor(rgb_resized, cv2.COLOR_RGB2GRAY)
     retina_mask = (gray_img > 35).astype(np.float32)
     retina_mask = cv2.GaussianBlur(retina_mask, (15, 15), 0)
     grayscale_cam = grayscale_cam * retina_mask
 
     overlay = show_cam_on_image(rgb_float, grayscale_cam, use_rgb=True)
 
-    # retrieval: top 3
+    # retrieval top 3
     with torch.no_grad():
         sim = (ie.cpu() @ all_txt_emb.T).squeeze(0)
     top = sim.topk(3)
@@ -311,7 +353,7 @@ def analyze(image):
         matches += f"\n\nStructure:\n{r['prompt_a']}\n"
         matches += f"\nLesions:\n{r['prompt_b']}\n"
 
-    level = get_sev_level(sev_pct)
+    level   = get_sev_level(sev_pct)
     bar_sev = int(sev_pct / 2)
 
     report = f"""
@@ -322,10 +364,10 @@ SEVERITY: {sev_pct:.1f}% ({level})
 {'█' * bar_sev}{'░' * (50 - bar_sev)}
 
 CONFIDENCE PER CLASS:
-  AMD:    {'█' * int(per_cls['AMD'] * 50)} {per_cls['AMD'] * 100:.1f}%
-  DME:    {'█' * int(per_cls['DME'] * 50)} {per_cls['DME'] * 100:.1f}%
-  DRUSEN: {'█' * int(per_cls['DRUSEN'] * 50)} {per_cls['DRUSEN'] * 100:.1f}%
-  NORMAL: {'█' * int(per_cls['NORMAL'] * 50)} {per_cls['NORMAL'] * 100:.1f}%
+  AMD:    {'█' * int(per_cls.get('AMD', 0) * 50)} {per_cls.get('AMD', 0) * 100:.1f}%
+  DME:    {'█' * int(per_cls.get('DME', 0) * 50)} {per_cls.get('DME', 0) * 100:.1f}%
+  DRUSEN: {'█' * int(per_cls.get('DRUSEN', 0) * 50)} {per_cls.get('DRUSEN', 0) * 100:.1f}%
+  NORMAL: {'█' * int(per_cls.get('NORMAL', 0) * 50)} {per_cls.get('NORMAL', 0) * 100:.1f}%
 
 SIMILAR CASES FROM DATABASE:
 {matches}
@@ -340,13 +382,13 @@ def main():
     import gradio as gr
 
     with gr.Blocks(
-        title="MedSigLIP v3 OCT Analyzer",
+        title="MedSigLIP v7 OCT Analyzer",
         theme=gr.themes.Soft(),
     ) as app:
 
         gr.Markdown("""
-        # MedSigLIP v3 — Retinal OCT Analyzer
-        ### Cross-Attention Fusion + Dual Contrastive + Severity Estimation
+        # MedSigLIP v7 — Retinal OCT Analyzer
+        ### MedGemma 27B Prompts + Cross-Attention Fusion + Dual Contrastive + Severity Estimation
 
         Upload a retinal OCT scan to get:
         - **Disease Classification** (AMD, DME, DRUSEN, NORMAL)
@@ -358,8 +400,7 @@ def main():
         with gr.Row():
             with gr.Column(scale=1):
                 inp_img = gr.Image(label="Upload OCT Scan", type="numpy")
-                btn = gr.Button("Analyze", variant="primary", size="lg")
-                gr.Markdown("### Example Images")
+                btn     = gr.Button("Analyze", variant="primary", size="lg")
                 gr.Markdown("Upload any retinal OCT B-scan image (grayscale or RGB)")
 
             with gr.Column(scale=1):
@@ -374,7 +415,7 @@ def main():
         ---
         **Thesis Project** — Retinal OCT Disease Classification using MedSigLIP Multi-Task Learning
 
-        *Pipeline: MedGemma → Gemini Flash (split) → Qwen2.5 (severity) → MedSigLIP v3 (cross-attention + dual contrastive)*
+        *Pipeline: MedGemma 27B IT → Gemini Flash-Lite (split) → MedSigLIP v7 (cross-attention + dual contrastive)*
 
         Explainability: EigenCAM (layers[-2], blur=31, threshold=35%)
 

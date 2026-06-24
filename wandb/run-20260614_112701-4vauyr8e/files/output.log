@@ -1,0 +1,61 @@
+  OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  BBox-only loader: 1450 imagini cu adnotari reale
+  OCT5k [train]: 1447 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 | Val: 863
+  BBox train: 1447
+  Classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 13320.92it/s]
+W0614 11:27:04.929000 3108 site-packages\torch\utils\flop_counter.py:29] triton not found; flop counting will not work for triton kernels
+  MedSigLIP v10 (LoRA r=16 + 27B prompts):
+    Backbone(total incl. LoRA): 886,299,826 | Fusion: 15,940,224 | Heads: 596,229
+    Total: 902,836,280 | Trainable: 24,535,942 | Emb dim: 1152
+    Effective batch: 24 x 2 = 48
+    BBox fine-tuning garantat: 3 epoci la final
+    LoRA trainable breakdown:
+trainable params: 7,999,488 || all params: 886,299,826 || trainable%: 0.9026
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1370: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:39.)
+  return t.to(
+
+  Optimizer:
+  Optimizer groups:
+    lora: 7,999,488 params, lr=0.00015, wd=0.01
+    fusion: 15,925,248 params, lr=5e-05, wd=0.01
+    fusion_nd: 14,976 params, lr=5e-05, wd=0.0
+    heads: 591,104 params, lr=0.0001, wd=0.01
+    heads_nd: 5,126 params, lr=0.0001, wd=0.0
+
+======================================================================
+  FAZA 1: Antrenare normala (LoRA + 27B prompts)
+======================================================================
+Ep 1/30 [train]:  26%|█████████████████████████████████▊                                                                                                 | 32/124 [17:25<50:06, 32.68s/it, C=1.783, CL=1.373, L=2.254, S=0.198, i2t=5%]
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 947, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 760, in main
+    t = run_train(model, train_dl, loss_fn, opt, scaler, ep,
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 524, in run_train
+    i2t, t2i = contrastive_accuracy(ie.detach(), merged.detach())
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\losses\siglip_loss.py", line 81, in contrastive_accuracy
+    i2t = (sim.argmax(dim=1) == correct).sum().item() / batch_size * 100.0
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 947, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 760, in main
+    t = run_train(model, train_dl, loss_fn, opt, scaler, ep,
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 524, in run_train
+    i2t, t2i = contrastive_accuracy(ie.detach(), merged.detach())
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\losses\siglip_loss.py", line 81, in contrastive_accuracy
+    i2t = (sim.argmax(dim=1) == correct).sum().item() / batch_size * 100.0
+KeyboardInterrupt

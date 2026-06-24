@@ -1,0 +1,441 @@
+{
+  "model": "MedSigLIP_v7",
+  "disease_zero_shot": {
+    "A_single_generic": {
+      "setup": "A_single",
+      "accuracy": 68.32,
+      "f1_macro": 0.6237,
+      "mean_confidence": 50.56,
+      "per_class_report": {
+        "AMD": {
+          "precision": 0.9806451612903225,
+          "recall": 0.44837758112094395,
+          "f1-score": 0.6153846153846154,
+          "support": 339.0
+        },
+        "DME": {
+          "precision": 0.9791666666666666,
+          "recall": 0.7382198952879581,
+          "f1-score": 0.8417910447761194,
+          "support": 191.0
+        },
+        "DRUSEN": {
+          "precision": 0.2222222222222222,
+          "recall": 1.0,
+          "f1-score": 0.36363636363636365,
+          "support": 8.0
+        },
+        "NORMAL": {
+          "precision": 0.5084745762711864,
+          "recall": 1.0,
+          "f1-score": 0.6741573033707865,
+          "support": 210.0
+        },
+        "accuracy": 0.6831550802139037,
+        "macro avg": {
+          "precision": 0.6726271566125994,
+          "recall": 0.7966493691022255,
+          "f1-score": 0.6237423317919712,
+          "support": 748.0
+        },
+        "weighted avg": {
+          "precision": 0.8395948954618712,
+          "recall": 0.6831550802139037,
+          "f1-score": 0.6870048112093309,
+          "support": 748.0
+        }
+      }
+    },
+    "B_ensemble_generic": {
+      "setup": "B_ensemble",
+      "accuracy": 52.81,
+      "f1_macro": 0.437,
+      "mean_confidence": 48.51,
+      "per_class_report": {
+        "AMD": {
+          "precision": 1.0,
+          "recall": 0.07374631268436578,
+          "f1-score": 0.13736263736263737,
+          "support": 339.0
+        },
+        "DME": {
+          "precision": 0.9,
+          "recall": 0.8010471204188482,
+          "f1-score": 0.8476454293628809,
+          "support": 191.0
+        },
+        "DRUSEN": {
+          "precision": 0.056910569105691054,
+          "recall": 0.875,
+          "f1-score": 0.10687022900763359,
+          "support": 8.0
+        },
+        "NORMAL": {
+          "precision": 0.4883720930232558,
+          "recall": 1.0,
+          "f1-score": 0.65625,
+          "support": 210.0
+        },
+        "accuracy": 0.5280748663101604,
+        "macro avg": {
+          "precision": 0.6113206655322367,
+          "recall": 0.6874483582758035,
+          "f1-score": 0.43703207393328797,
+          "support": 748.0
+        },
+        "weighted avg": {
+          "precision": 0.8207398717750392,
+          "recall": 0.5280748663101604,
+          "f1-score": 0.4640824504094992,
+          "support": 748.0
+        }
+      }
+    },
+    "C_struct_path": {
+      "setup": "C_struct_path",
+      "accuracy": 68.18,
+      "f1_macro": 0.6082,
+      "mean_confidence": 53.19,
+      "per_class_report": {
+        "AMD": {
+          "precision": 0.993103448275862,
+          "recall": 0.4247787610619469,
+          "f1-score": 0.5950413223140496,
+          "support": 339.0
+        },
+        "DME": {
+          "precision": 0.9736842105263158,
+          "recall": 0.774869109947644,
+          "f1-score": 0.8629737609329446,
+          "support": 191.0
+        },
+        "DRUSEN": {
+          "precision": 0.1702127659574468,
+          "recall": 1.0,
+          "f1-score": 0.2909090909090909,
+          "support": 8.0
+        },
+        "NORMAL": {
+          "precision": 0.5198019801980198,
+          "recall": 1.0,
+          "f1-score": 0.6840390879478827,
+          "support": 210.0
+        },
+        "accuracy": 0.6818181818181818,
+        "macro avg": {
+          "precision": 0.664200601239411,
+          "recall": 0.7999119677523977,
+          "f1-score": 0.608240815525992,
+          "support": 748.0
+        },
+        "weighted avg": {
+          "precision": 0.8464650683760525,
+          "recall": 0.6818181818181818,
+          "f1-score": 0.6851904783408869,
+          "support": 748.0
+        }
+      }
+    },
+    "D_struct_path_ensemble": {
+      "setup": "D_struct_path_ens",
+      "accuracy": 67.91,
+      "f1_macro": 0.6318,
+      "mean_confidence": 53.03,
+      "per_class_report": {
+        "AMD": {
+          "precision": 1.0,
+          "recall": 0.41887905604719766,
+          "f1-score": 0.5904365904365905,
+          "support": 339.0
+        },
+        "DME": {
+          "precision": 0.9736842105263158,
+          "recall": 0.774869109947644,
+          "f1-score": 0.8629737609329446,
+          "support": 191.0
+        },
+        "DRUSEN": {
+          "precision": 0.25806451612903225,
+          "recall": 1.0,
+          "f1-score": 0.41025641025641024,
+          "support": 8.0
+        },
+        "NORMAL": {
+          "precision": 0.49645390070921985,
+          "recall": 1.0,
+          "f1-score": 0.6635071090047393,
+          "support": 210.0
+        },
+        "accuracy": 0.679144385026738,
+        "macro avg": {
+          "precision": 0.682050656841142,
+          "recall": 0.7984370414987104,
+          "f1-score": 0.6317934676576711,
+          "support": 748.0
+        },
+        "weighted avg": {
+          "precision": 0.8439752934338167,
+          "recall": 0.679144385026738,
+          "f1-score": 0.6786156907342822,
+          "support": 748.0
+        }
+      }
+    }
+  },
+  "biomarker_all_bbox": {
+    "zero_shot": {
+      "per_biomarker": {
+        "SoftDrusenPED": {
+          "accuracy": 59.71,
+          "f1": 0.2171,
+          "precision": 0.1267,
+          "recall": 0.76,
+          "n_positive": 25
+        },
+        "PRLayerDisruption": {
+          "accuracy": 28.53,
+          "f1": 0.3848,
+          "precision": 0.2603,
+          "recall": 0.7379,
+          "n_positive": 103
+        },
+        "GeographicAtrophy": {
+          "accuracy": 37.94,
+          "f1": 0.1457,
+          "precision": 0.0789,
+          "recall": 0.9474,
+          "n_positive": 19
+        },
+        "SoftDrusen": {
+          "accuracy": 60.0,
+          "f1": 0.4472,
+          "precision": 0.3595,
+          "recall": 0.5914,
+          "n_positive": 93
+        },
+        "ReticularDrusen": {
+          "accuracy": 59.12,
+          "f1": 0.1032,
+          "precision": 0.0584,
+          "recall": 0.4444,
+          "n_positive": 18
+        },
+        "HyperfluorescentSpots": {
+          "accuracy": 32.65,
+          "f1": 0.304,
+          "precision": 0.1812,
+          "recall": 0.9434,
+          "n_positive": 53
+        },
+        "HardDrusen": {
+          "accuracy": 60.29,
+          "f1": 0.5545,
+          "precision": 0.5793,
+          "recall": 0.5316,
+          "n_positive": 158
+        },
+        "ChoroidalFolds": {
+          "accuracy": 35.0,
+          "f1": 0.2353,
+          "precision": 0.1393,
+          "recall": 0.7556,
+          "n_positive": 45
+        }
+      },
+      "overall_accuracy": 46.65,
+      "overall_f1": 0.3216,
+      "macro_f1": 0.299
+    },
+    "trained_v5": {
+      "per_biomarker": {
+        "Geographicatrophy": {
+          "accuracy": 95.0,
+          "f1": 0.4138,
+          "precision": 0.6,
+          "recall": 0.3158,
+          "n_positive": 19
+        },
+        "PRlayerdisruption": {
+          "accuracy": 40.88,
+          "f1": 0.5012,
+          "precision": 0.3367,
+          "recall": 0.9806,
+          "n_positive": 103
+        },
+        "SoftdrusenPED": {
+          "accuracy": 63.24,
+          "f1": 0.2424,
+          "precision": 0.1429,
+          "recall": 0.8,
+          "n_positive": 25
+        },
+        "Reticulardrusen": {
+          "accuracy": 45.59,
+          "f1": 0.1315,
+          "precision": 0.0718,
+          "recall": 0.7778,
+          "n_positive": 18
+        },
+        "Hyperfluorescentspots": {
+          "accuracy": 66.18,
+          "f1": 0.4498,
+          "precision": 0.3013,
+          "recall": 0.8868,
+          "n_positive": 53
+        },
+        "Softdrusen": {
+          "accuracy": 42.06,
+          "f1": 0.4747,
+          "precision": 0.3156,
+          "recall": 0.957,
+          "n_positive": 93
+        },
+        "Harddrusen": {
+          "accuracy": 72.06,
+          "f1": 0.6415,
+          "precision": 0.7944,
+          "recall": 0.538,
+          "n_positive": 158
+        },
+        "Choroidalfolds": {
+          "accuracy": 82.35,
+          "f1": 0.4231,
+          "precision": 0.3729,
+          "recall": 0.4889,
+          "n_positive": 45
+        }
+      },
+      "overall_accuracy": 63.42,
+      "overall_f1": 0.4356,
+      "macro_f1": 0.4098
+    }
+  },
+  "biomarker_doctor_only": {
+    "zero_shot": {
+      "per_biomarker": {
+        "SoftDrusenPED": {
+          "accuracy": 42.67,
+          "f1": 0.3385,
+          "precision": 0.2115,
+          "recall": 0.8462,
+          "n_positive": 13
+        },
+        "PRLayerDisruption": {
+          "accuracy": 34.67,
+          "f1": 0.4096,
+          "precision": 0.2881,
+          "recall": 0.7083,
+          "n_positive": 24
+        },
+        "GeographicAtrophy": {
+          "accuracy": 37.33,
+          "f1": 0.254,
+          "precision": 0.1455,
+          "recall": 1.0,
+          "n_positive": 8
+        },
+        "SoftDrusen": {
+          "accuracy": 53.33,
+          "f1": 0.5679,
+          "precision": 0.5349,
+          "recall": 0.6053,
+          "n_positive": 38
+        },
+        "ReticularDrusen": {
+          "accuracy": 44.0,
+          "f1": 0.25,
+          "precision": 0.175,
+          "recall": 0.4375,
+          "n_positive": 16
+        },
+        "HyperfluorescentSpots": {
+          "accuracy": 21.33,
+          "f1": 0.169,
+          "precision": 0.0923,
+          "recall": 1.0,
+          "n_positive": 6
+        },
+        "HardDrusen": {
+          "accuracy": 56.0,
+          "f1": 0.6292,
+          "precision": 0.6512,
+          "recall": 0.6087,
+          "n_positive": 46
+        },
+        "ChoroidalFolds": {
+          "accuracy": 26.67,
+          "f1": 0.2466,
+          "precision": 0.1429,
+          "recall": 0.9,
+          "n_positive": 10
+        }
+      },
+      "overall_accuracy": 39.5,
+      "overall_f1": 0.3752,
+      "macro_f1": 0.3581
+    },
+    "trained_v5": {
+      "per_biomarker": {
+        "Geographicatrophy": {
+          "accuracy": 92.0,
+          "f1": 0.625,
+          "precision": 0.625,
+          "recall": 0.625,
+          "n_positive": 8
+        },
+        "PRlayerdisruption": {
+          "accuracy": 48.0,
+          "f1": 0.5412,
+          "precision": 0.377,
+          "recall": 0.9583,
+          "n_positive": 24
+        },
+        "SoftdrusenPED": {
+          "accuracy": 54.67,
+          "f1": 0.3929,
+          "precision": 0.2558,
+          "recall": 0.8462,
+          "n_positive": 13
+        },
+        "Reticulardrusen": {
+          "accuracy": 46.67,
+          "f1": 0.3939,
+          "precision": 0.26,
+          "recall": 0.8125,
+          "n_positive": 16
+        },
+        "Hyperfluorescentspots": {
+          "accuracy": 52.0,
+          "f1": 0.1,
+          "precision": 0.0588,
+          "recall": 0.3333,
+          "n_positive": 6
+        },
+        "Softdrusen": {
+          "accuracy": 57.33,
+          "f1": 0.7037,
+          "precision": 0.5429,
+          "recall": 1.0,
+          "n_positive": 38
+        },
+        "Harddrusen": {
+          "accuracy": 76.0,
+          "f1": 0.8163,
+          "precision": 0.7692,
+          "recall": 0.8696,
+          "n_positive": 46
+        },
+        "Choroidalfolds": {
+          "accuracy": 84.0,
+          "f1": 0.4,
+          "precision": 0.4,
+          "recall": 0.4,
+          "n_positive": 10
+        }
+      },
+      "overall_accuracy": 63.83,
+      "overall_f1": 0.5562,
+      "macro_f1": 0.4966
+    }
+  }
+}

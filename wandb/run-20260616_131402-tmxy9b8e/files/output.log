@@ -1,0 +1,83 @@
+  OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 (1447 bbox, weight=3.0x)
+  OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Val: 863 | Classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Loading MIRAGE-Large...
+Creating MIRAGE model for inputs ['bscan']
+Image size: (512, 512), Patch size: (32, 32)
+Loading weights from local directory
+    MIRAGE params: 303,622,144 (LoRA trainable)
+  Loading MedSigLIP text encoder...
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 13889.41it/s]
+    Total: 1,200,903,992 | Trainable: 18,981,510
+    Projection: 1024 -> 1152
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1370: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:39.)
+  return t.to(
+
+  Optimizer:
+  Optimizer groups:
+    projection: 2,506,752 params, lr=0.0005
+    projection_nd: 4,352 params, lr=0.0005
+    fusion: 15,925,248 params, lr=5e-05
+    fusion_nd: 14,976 params, lr=5e-05
+    heads: 525,568 params, lr=0.0001
+    heads_nd: 4,614 params, lr=0.0001
+Ep 1/30:  98%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▉   | 91/93 [00:56<00:01,  1.60it/s, C=0.168, CL=1.306, L=1.504, S=0.099, i2t=3%]
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 768, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 676, in main
+    t = run_train(model, train_dl, loss_fn, opt, scaler, ep)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 511, in run_train
+    for step, batch in enumerate(pbar):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\tqdm\std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\dataloader.py", line 741, in __next__
+    data = self._next_data()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\dataloader.py", line 801, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\_utils\fetch.py", line 54, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\_utils\fetch.py", line 54, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 162, in __getitem__
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\PIL\Image.py", line 1380, in filter
+    return self._new(filter.filter(self.im))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\PIL\ImageFilter.py", line 191, in filter
+    return image.gaussian_blur(xy)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 768, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 676, in main
+    t = run_train(model, train_dl, loss_fn, opt, scaler, ep)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 511, in run_train
+    for step, batch in enumerate(pbar):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\tqdm\std.py", line 1181, in __iter__
+    for obj in iterable:
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\dataloader.py", line 741, in __next__
+    data = self._next_data()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\dataloader.py", line 801, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\_utils\fetch.py", line 54, in fetch
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\utils\data\_utils\fetch.py", line 54, in <listcomp>
+    data = [self.dataset[idx] for idx in possibly_batched_index]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 162, in __getitem__
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\PIL\Image.py", line 1380, in filter
+    return self._new(filter.filter(self.im))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\PIL\ImageFilter.py", line 191, in filter
+    return image.gaussian_blur(xy)
+KeyboardInterrupt

@@ -1,0 +1,24 @@
+2026-06-13 08:08:00,736 INFO    MainThread:22656 [wandb_setup.py:_flush():81] Current SDK version is 0.26.1
+2026-06-13 08:08:00,736 INFO    MainThread:22656 [wandb_setup.py:_flush():81] Configure stats pid to 22656
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_init.py:setup_run_log_directory():723] Logging user logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260613_080800-2ayrjhac\logs\debug.log
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_init.py:setup_run_log_directory():724] Logging internal logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260613_080800-2ayrjhac\logs\debug-internal.log
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_init.py:init():850] calling init triggers
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_init.py:init():855] wandb.init called with sweep_config: {}
+config: {'model': 'models/medsiglip-448', 'bs_effective': 16, 'epochs': 30, 'bbox_finetune_epochs': 3, 'severity': 'severity_scores_v2 (AREDS counts)', 'prompts': 'MedGemma 27B IT (vs 4B in v6)', 'sev_loss': 'SmoothL1', 'sev_activation': 'clamp(0,1)', 'wd_bias_norm': False, 'dataset': 'OCT5k', 'version': 'v8', '_wandb': {}}
+2026-06-13 08:08:00,737 INFO    MainThread:22656 [wandb_init.py:init():898] starting backend
+2026-06-13 08:08:03,129 INFO    MainThread:22656 [wandb_init.py:init():913] sending inform_init request
+2026-06-13 08:08:04,191 INFO    MainThread:22656 [wandb_init.py:init():918] backend started and connected
+2026-06-13 08:08:04,192 INFO    MainThread:22656 [wandb_init.py:init():988] updated telemetry
+2026-06-13 08:08:04,573 INFO    MainThread:22656 [wandb_init.py:init():1011] communicating run to backend with 90.0 second timeout
+2026-06-13 08:08:04,984 INFO    MainThread:22656 [wandb_init.py:init():1056] starting run threads in backend
+2026-06-13 08:08:05,228 INFO    MainThread:22656 [wandb_run.py:_console_start():2554] atexit reg
+2026-06-13 08:08:05,228 INFO    MainThread:22656 [wandb_run.py:_redirect():2403] redirect: wrap_raw
+2026-06-13 08:08:05,228 INFO    MainThread:22656 [wandb_run.py:_redirect():2472] Wrapping output streams.
+2026-06-13 08:08:05,228 INFO    MainThread:22656 [wandb_run.py:_redirect():2495] Redirects installed.
+2026-06-13 08:08:05,233 INFO    MainThread:22656 [wandb_init.py:init():1094] run started, returning control to user process
+2026-06-13 16:38:50,106 INFO    MainThread:22656 [wandb_run.py:_finish():2321] finishing run robi913-technical-university-of-cluj-napoca/licenta-medsiglip/2ayrjhac
+2026-06-13 16:38:50,106 INFO    MainThread:22656 [wandb_run.py:_atexit_cleanup():2520] got exitcode: 0
+2026-06-13 16:38:50,107 INFO    MainThread:22656 [wandb_run.py:_restore():2502] restore
+2026-06-13 16:38:50,107 INFO    MainThread:22656 [wandb_run.py:_restore():2508] restore done
+2026-06-13 16:38:51,905 INFO    MainThread:22656 [wandb_run.py:_footer_sync_info():3889] logging synced files

@@ -1,0 +1,80 @@
+_wandb:
+    value:
+        cli_version: 0.26.1
+        e:
+            qo0j7e40pw1e7f493t6tx9wj37i2t2vv:
+                cpu_count: 16
+                cpu_count_logical: 24
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "709636386816"
+                        used: "623811407872"
+                email: ardelean.ni.robert@student.utcluj.ro
+                executable: C:\Users\admdev\miniconda3\envs\Robert\python.exe
+                git:
+                    commit: 589a8f021c72221a7e5a8c34afaab88c4a1b5662
+                    remote: https://github.com/Robi-913/Licenta_2026_Ardelean_Robert_Emanuel.git
+                gpu: NVIDIA GeForce RTX 3090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10496
+                      memoryTotal: "25769803776"
+                      name: NVIDIA GeForce RTX 3090
+                      uuid: GPU-c444380a-4ad2-8b0b-cb7b-52567c36e56f
+                host: Sistem36-4
+                memory:
+                    total: "34088464384"
+                os: Windows-10-10.0.26200-SP0
+                program: -m src.pipelines.medsiglip.train_medsiglip
+                python: CPython 3.10.20
+                root: D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel
+                startedAt: "2026-06-16T14:41:36.635526Z"
+                writerId: qo0j7e40pw1e7f493t6tx9wj37i2t2vv
+        m: []
+        python_version: 3.10.20
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+                - 98
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+                - 98
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.10.20
+            "5": 0.26.1
+            "6": 5.5.4
+            "8":
+                - 3
+            "12": 0.26.1
+            "13": windows-amd64
+bbox_weight:
+    value: 3
+bs_effective:
+    value: 256
+image_encoder:
+    value: MIRAGE-Base (frozen)
+lam_cls:
+    value: 1
+projection:
+    value: 1024 -> 1152
+text_encoder:
+    value: MedSigLIP (frozen)
+version:
+    value: v14

@@ -33,20 +33,22 @@ class Config:
     masks_auto = "data/OCT5k/Masks/Masks_Automatic_RGB/Grading"
     masks_manual = "data/OCT5k/Masks/Masks_Manual_RGB/Grading_1"
 
-    meta_dir = "data/oct5k/metadata"
-    splits_dir = "data/oct5k/splits"
+    meta_dir   = "data/oct5k/metadata_v2"
+    splits_dir = "data/oct5k/splits_v3"       # v3 = patient-level split
+
+    yolo_bboxes_json = "data/oct5k/yolo_bboxes.json"
 
     img_size = 512
 
     train_ratio = 0.7
-    val_ratio = 0.15
-    test_ratio = 0.15
+    val_ratio   = 0.15
+    test_ratio  = 0.15
 
     disease_map = {
-        "AMD Part1": "AMD",
-        "AMD Part2": "AMD",
-        "DME": "DME",
-        "DRUSEN": "DRUSEN",
+        "AMD Part1":   "AMD",
+        "AMD Part2":   "AMD",
+        "DME":         "DME",
+        "DRUSEN":      "DRUSEN",
         "Normal Part1": "NORMAL",
         "Normal Part2": "NORMAL",
     }
@@ -54,10 +56,10 @@ class Config:
     layers = ["ILM", "OPL", "IS-OS", "IBRPE", "OBRPE"]
 
     regions = {
-        "RNFL_GCL_IPL": ("ILM", "OPL"),
-        "INL_OPL": ("OPL", "IS-OS"),
+        "RNFL_GCL_IPL":  ("ILM",   "OPL"),
+        "INL_OPL":       ("OPL",   "IS-OS"),
         "photoreceptors": ("IS-OS", "IBRPE"),
-        "RPE": ("IBRPE", "OBRPE"),
+        "RPE":           ("IBRPE", "OBRPE"),
     }
 
 
@@ -70,6 +72,31 @@ def get_disease(path):
     normalized = path.replace("\\", "/")
     folder = normalized.split("/")[0]
     return cfg.disease_map.get(folder, "UNKNOWN")
+
+
+def get_patient_session(path):
+    parts = path.replace("\\", "/").split("/")
+
+    # Tip E2E: AMD Part1/AMD (7).E2E/2-25-2017/Image.png
+    if any(".E2E" in p for p in parts):
+        idx = next(i for i, p in enumerate(parts) if ".E2E" in p)
+        return "/".join(parts[:idx + 2])
+
+    # Tip non-E2E cu subfolder: AMD Part1/AMD (21)/Image (13).png
+    if len(parts) >= 3 and parts[-1].lower().endswith(".png"):
+        # are subfolder intermediar (nu e flat)
+        if not parts[1].endswith(".png"):
+            return "/".join(parts[:2])
+
+    # Tip flat (DRUSEN): DRUSEN/DRUSEN-9884539-8.png
+    # patient = filename fara ultimul -N
+    if len(parts) == 2:
+        fname = parts[-1].replace(".png", "").replace(".jpeg", "")
+        # scoatem ultimul segment dupa "-"
+        patient_id = "-".join(fname.split("-")[:-1])
+        return f"{parts[0]}/{patient_id}" if patient_id else f"{parts[0]}/{fname}"
+
+    return "/".join(parts[:2])
 
 
 def make_key(path):
@@ -145,9 +172,9 @@ def parse_boundaries(csv_path):
         vals = df[name].values.astype(float)
         layer_stats[name] = {
             "mean_y": round(float(np.mean(vals)), 1),
-            "std_y": round(float(np.std(vals)), 2),
-            "min_y": int(np.min(vals)),
-            "max_y": int(np.max(vals)),
+            "std_y":  round(float(np.std(vals)), 2),
+            "min_y":  int(np.min(vals)),
+            "max_y":  int(np.max(vals)),
         }
 
     region_stats = {}
@@ -157,26 +184,26 @@ def parse_boundaries(csv_path):
         thick = bot_vals - top_vals
 
         region_stats[rname] = {
-            "mean_thickness_px": round(float(np.mean(thick)), 1),
-            "std_thickness_px": round(float(np.std(thick)), 2),
-            "min_thickness_px": int(np.min(thick)),
-            "max_thickness_px": int(np.max(thick)),
+            "mean_thickness_px":  round(float(np.mean(thick)), 1),
+            "std_thickness_px":   round(float(np.std(thick)), 2),
+            "min_thickness_px":   int(np.min(thick)),
+            "max_thickness_px":   int(np.max(thick)),
             "mean_thickness_pct": round(float(np.mean(thick)) / cfg.img_size * 100, 2),
         }
 
     total = df["OBRPE"].values.astype(float) - df["ILM"].values.astype(float)
     t_mean = np.mean(total)
-    t_std = np.std(total)
+    t_std  = np.std(total)
 
     deformations = []
     if t_std > 3:
         for x in range(len(total)):
             if abs(total[x] - t_mean) > 2 * t_std:
                 deformations.append({
-                    "x_position": x,
-                    "x_normalized": round(x / cfg.img_size, 3),
-                    "zone": retinal_zone(x / cfg.img_size),
-                    "thickness_px": int(total[x]),
+                    "x_position":           x,
+                    "x_normalized":         round(x / cfg.img_size, 3),
+                    "zone":                 retinal_zone(x / cfg.img_size),
+                    "thickness_px":         int(total[x]),
                     "deviation_from_mean_px": round(float(total[x] - t_mean), 1),
                     "type": "thickening" if total[x] > t_mean else "thinning",
                 })
@@ -185,14 +212,14 @@ def parse_boundaries(csv_path):
         "layers": layer_stats,
         "regions": region_stats,
         "total_retinal_thickness": {
-            "mean_px": round(float(t_mean), 1),
-            "std_px": round(float(t_std), 2),
-            "min_px": int(np.min(total)),
-            "max_px": int(np.max(total)),
+            "mean_px":  round(float(t_mean), 1),
+            "std_px":   round(float(t_std), 2),
+            "min_px":   int(np.min(total)),
+            "max_px":   int(np.max(total)),
             "mean_pct": round(float(t_mean) / cfg.img_size * 100, 2),
         },
         "deformation_zones": deformations[:10],
-        "num_deformations": len(deformations),
+        "num_deformations":  len(deformations),
     }
 
 
@@ -213,17 +240,17 @@ def correlate_bbox_layers(bbox, bounds):
 
     if cy < ordered[0][1]:
         return {
-            "affected_layer": "above_ILM",
-            "depth_info": "vitreous space, above inner limiting membrane",
-            "closest_layer": ordered[0][0],
+            "affected_layer":       "above_ILM",
+            "depth_info":           "vitreous space, above inner limiting membrane",
+            "closest_layer":        ordered[0][0],
             "distance_to_closest_px": round(ordered[0][1] - cy, 1),
         }
 
     if cy > ordered[-1][1]:
         return {
-            "affected_layer": "below_OBRPE",
-            "depth_info": "choroidal space, below outer Bruch's RPE",
-            "closest_layer": ordered[-1][0],
+            "affected_layer":       "below_OBRPE",
+            "depth_info":           "choroidal space, below outer Bruch's RPE",
+            "closest_layer":        ordered[-1][0],
             "distance_to_closest_px": round(cy - ordered[-1][1], 1),
         }
 
@@ -239,12 +266,11 @@ def correlate_bbox_layers(bbox, bounds):
                     break
 
             rel_depth = (cy - top_y) / max(1, bot_y - top_y)
-
             label = region if region != "unknown" else f"between_{top_name}_and_{bot_name}"
             return {
-                "affected_layer": label,
-                "between_layers": [top_name, bot_name],
-                "relative_depth_in_region": round(rel_depth, 3),
+                "affected_layer":             label,
+                "between_layers":             [top_name, bot_name],
+                "relative_depth_in_region":   round(rel_depth, 3),
                 "depth_info": f"located between {top_name} (y={top_y:.0f}) and {bot_name} (y={bot_y:.0f})",
             }
 
@@ -263,25 +289,60 @@ def process_bboxes(img_path, bb_group, bounds):
         ymin_n = round(ymin / cfg.img_size, 4)
         xmax_n = round(xmax / cfg.img_size, 4)
         ymax_n = round(ymax / cfg.img_size, 4)
-        cx_n = (xmin_n + xmax_n) / 2
-        cy_n = (ymin_n + ymax_n) / 2
+        cx_n   = (xmin_n + xmax_n) / 2
+        cy_n   = (ymin_n + ymax_n) / 2
 
-        area_px = (xmax - xmin) * (ymax - ymin)
+        area_px  = (xmax - xmin) * (ymax - ymin)
         area_pct = round(100.0 * area_px / (cfg.img_size ** 2), 2)
 
-        layer_info = correlate_bbox_layers(
-            (xmin, ymin, xmax, ymax), bounds
-        )
+        layer_info = correlate_bbox_layers((xmin, ymin, xmax, ymax), bounds)
 
         lesions.append({
-            "class": cls,
-            "bbox_px": [xmin, ymin, xmax, ymax],
-            "bbox_normalized": [xmin_n, ymin_n, xmax_n, ymax_n],
+            "class":             cls,
+            "bbox_px":           [xmin, ymin, xmax, ymax],
+            "bbox_normalized":   [xmin_n, ymin_n, xmax_n, ymax_n],
             "center_normalized": [round(cx_n, 4), round(cy_n, 4)],
-            "size_px": [xmax - xmin, ymax - ymin],
-            "area_percent": area_pct,
-            "retinal_zone": retinal_zone(cx_n),
+            "size_px":           [xmax - xmin, ymax - ymin],
+            "area_percent":      area_pct,
+            "retinal_zone":      retinal_zone(cx_n),
             "layer_correlation": layer_info,
+        })
+
+    return lesions
+
+
+def process_yolo_bboxes(yolo_lesions, bounds):
+    lesions = []
+
+    for les in yolo_lesions:
+        cls  = les["class"]
+        conf = les.get("confidence", 0.0)
+
+        x1, y1, x2, y2 = les["bbox_abs"]
+        xmin, ymin, xmax, ymax = int(x1), int(y1), int(x2), int(y2)
+
+        xmin_n = round(xmin / cfg.img_size, 4)
+        ymin_n = round(ymin / cfg.img_size, 4)
+        xmax_n = round(xmax / cfg.img_size, 4)
+        ymax_n = round(ymax / cfg.img_size, 4)
+        cx_n   = (xmin_n + xmax_n) / 2
+        cy_n   = (ymin_n + ymax_n) / 2
+
+        area_px  = (xmax - xmin) * (ymax - ymin)
+        area_pct = round(100.0 * area_px / (cfg.img_size ** 2), 2)
+
+        layer_info = correlate_bbox_layers((xmin, ymin, xmax, ymax), bounds)
+
+        lesions.append({
+            "class":             cls,
+            "bbox_px":           [xmin, ymin, xmax, ymax],
+            "bbox_normalized":   [xmin_n, ymin_n, xmax_n, ymax_n],
+            "center_normalized": [round(cx_n, 4), round(cy_n, 4)],
+            "size_px":           [xmax - xmin, ymax - ymin],
+            "area_percent":      area_pct,
+            "retinal_zone":      retinal_zone(cx_n),
+            "layer_correlation": layer_info,
+            "yolo_confidence":   round(conf, 4),
         })
 
     return lesions
@@ -302,15 +363,15 @@ def collect_images():
                 if not fname.lower().endswith((".png", ".jpeg", ".jpg")):
                     continue
 
-                full = os.path.join(root, fname)
-                rel = os.path.relpath(full, base_dir)
+                full     = os.path.join(root, fname)
+                rel      = os.path.relpath(full, base_dir)
                 base_rel = os.path.splitext(rel)[0]
 
                 if base_rel not in found or rel.endswith(".png"):
                     found[base_rel] = {
-                        "rel_path": rel,
+                        "rel_path":  rel,
                         "disk_path": full,
-                        "source": os.path.basename(base_dir),
+                        "source":    os.path.basename(base_dir),
                     }
 
     return found
@@ -323,21 +384,34 @@ def build_metadata():
     print("  STEP 1: BUILD STRUCTURED METADATA FOR MEDGEMMA")
     print(f"{'=' * 70}")
 
-    os.makedirs(cfg.meta_dir, exist_ok=True)
+    os.makedirs(cfg.meta_dir,   exist_ok=True)
     os.makedirs(cfg.splits_dir, exist_ok=True)
 
-    bb_df = pd.read_csv(cfg.bb_csv)
+    bb_df      = pd.read_csv(cfg.bb_csv)
     bb_grouped = dict(list(bb_df.groupby("image")))
-    print(f"\n  Bounding boxes: {len(bb_df)} total, {len(bb_grouped)} images")
+    print(f"\n  Bounding boxes doctor: {len(bb_df)} total, {len(bb_grouped)} imagini")
+
+    yolo_bboxes = {}
+    if os.path.exists(cfg.yolo_bboxes_json):
+        with open(cfg.yolo_bboxes_json, "r", encoding="utf-8") as f:
+            yolo_bboxes_raw = json.load(f)
+            yolo_bboxes = {k.replace("\\", "/"): v for k, v in yolo_bboxes_raw.items()}
+        n_yolo_with_det = sum(
+            1 for v in yolo_bboxes.values()
+            if v["bbox_source"] == "yolo" and len(v.get("lesions", [])) > 0
+        )
+        print(f"  YOLO bboxes: {len(yolo_bboxes)} imagini, {n_yolo_with_det} cu detectii")
+    else:
+        print(f"  WARNING: {cfg.yolo_bboxes_json} not found — YOLO bboxes disabled")
 
     images = collect_images()
     print(f"  Images found: {len(images)}")
 
     all_meta = []
-    counts = defaultdict(int)
+    counts   = defaultdict(int)
 
     for base_rel, info in sorted(images.items()):
-        rel = info["rel_path"]
+        rel  = info["rel_path"]
         disk = info["disk_path"]
         disease = get_disease(rel)
 
@@ -351,12 +425,14 @@ def build_metadata():
         if mask_path:
             counts["has_mask"] += 1
 
-        lesions = []
-        rel_norm = rel.replace("\\", "/")
+        lesions     = []
+        bbox_source = "none"
+
+        rel_norm   = rel.replace("\\", "/")
         candidates = [
             rel_norm,
             rel_norm.replace(".jpeg", ".png"),
-            rel_norm.replace(".jpg", ".png"),
+            rel_norm.replace(".jpg",  ".png"),
         ]
 
         bb_key = None
@@ -366,29 +442,39 @@ def build_metadata():
                 break
 
         if bb_key:
-            lesions = process_bboxes(rel, bb_grouped[bb_key], bounds)
-            counts["has_bbox"] += 1
+            lesions     = process_bboxes(rel, bb_grouped[bb_key], bounds)
+            bbox_source = "doctor"
+            counts["has_bbox_doctor"] += 1
+        elif rel_norm in yolo_bboxes:
+            yolo_entry  = yolo_bboxes[rel_norm]
+            yolo_lesions = yolo_entry.get("lesions", [])
+            if yolo_lesions:
+                lesions     = process_yolo_bboxes(yolo_lesions, bounds)
+                bbox_source = "yolo"
+                counts["has_bbox_yolo"] += 1
 
         meta = {
-            "image_path": rel,
-            "image_disk_path": disk,
+            "image_path":       rel,
+            "image_disk_path":  disk,
             "disease_category": disease,
-            "image_size": [cfg.img_size, cfg.img_size],
+            "image_size":       [cfg.img_size, cfg.img_size],
 
-            "has_boundaries": bounds is not None,
-            "boundary_csv_path": bound_path,
-            "boundaries": bounds,
+            # v3: adaugam patient_session pentru split corect
+            "patient_session":  get_patient_session(rel),
 
-            "has_mask_rgb": mask_path is not None,
-            "mask_rgb_path": mask_path,
+            "has_boundaries":      bounds is not None,
+            "boundary_csv_path":   bound_path,
+            "boundaries":          bounds,
 
-            "has_bounding_boxes": len(lesions) > 0,
-            "num_lesions": len(lesions),
-            "lesion_classes": sorted(set(l["class"] for l in lesions)),
-            "total_lesion_area_percent": round(
-                sum(l["area_percent"] for l in lesions), 2
-            ),
-            "lesions": lesions,
+            "has_mask_rgb":   mask_path is not None,
+            "mask_rgb_path":  mask_path,
+
+            "has_bounding_boxes":        len(lesions) > 0,
+            "bbox_source":               bbox_source,
+            "num_lesions":               len(lesions),
+            "lesion_classes":            sorted(set(l["class"] for l in lesions)),
+            "total_lesion_area_percent": round(sum(l["area_percent"] for l in lesions), 2),
+            "lesions":                   lesions,
         }
 
         all_meta.append(meta)
@@ -406,10 +492,12 @@ def build_metadata():
         json.dump(all_meta, f, indent=2, ensure_ascii=False)
 
     print(f"\n  {'─' * 50}")
-    print(f"  Total processed:   {counts['total']}")
-    print(f"  With boundaries:   {counts['has_bounds']}")
-    print(f"  With RGB mask:     {counts['has_mask']}")
-    print(f"  With bboxes:       {counts['has_bbox']}")
+    print(f"  Total processed:      {counts['total']}")
+    print(f"  With boundaries:      {counts['has_bounds']}")
+    print(f"  With RGB mask:        {counts['has_mask']}")
+    print(f"  With bbox (doctor):   {counts['has_bbox_doctor']}")
+    print(f"  With bbox (yolo):     {counts['has_bbox_yolo']}")
+    print(f"  Total cu bbox:        {counts['has_bbox_doctor'] + counts['has_bbox_yolo']}")
     print(f"\n  Per disease:")
     for d in ["AMD", "DME", "DRUSEN", "NORMAL"]:
         print(f"    {d:10s}: {counts.get(d, 0)}")
@@ -417,66 +505,122 @@ def build_metadata():
     return all_meta
 
 
-# ---------- splits ----------
+# ---------- splits v3 — PATIENT-LEVEL ----------
 
 def make_splits(all_meta):
+    """
+    v3: Split la nivel de pacient/sesiune, nu la nivel de imagine.
+
+    Problema v1/v2: split random pe imagini → același pacient apare
+    în train ȘI test → data leakage → R@1 inflat artificial (99%).
+
+    Fix: grupăm imaginile după patient_session (primele 3 nivele din path),
+    facem split pe grupuri, apoi toate imaginile din grup merg în același split.
+
+    "AMD Part1/AMD (1).E2E/2-25-2017 9-10-42 PM" = un pacient/sesiune
+    → toate Image_N.png din acest folder → același split
+    """
     print(f"\n{'=' * 70}")
-    print("  GENERATING TRAIN / VAL / TEST SPLITS")
+    print("  GENERATING TRAIN / VAL / TEST SPLITS (v3 — PATIENT-LEVEL)")
     print(f"{'=' * 70}")
 
     rows = []
     for m in all_meta:
         rows.append({
-            "image_path": m["image_path"],
-            "image_disk_path": m["image_disk_path"],
-            "disease": m["disease_category"],
-            "has_bbox": m["has_bounding_boxes"],
-            "has_boundaries": m["has_boundaries"],
-            "has_mask": m["has_mask_rgb"],
-            "num_lesions": m["num_lesions"],
-            "mask_rgb_path": m.get("mask_rgb_path", ""),
+            "image_path":       m["image_path"],
+            "image_disk_path":  m["image_disk_path"],
+            "disease":          m["disease_category"],
+            "patient_session":  m["patient_session"],
+            "has_bbox":         m["has_bounding_boxes"],
+            "bbox_source":      m["bbox_source"],
+            "has_boundaries":   m["has_boundaries"],
+            "has_mask":         m["has_mask_rgb"],
+            "num_lesions":      m["num_lesions"],
+            "mask_rgb_path":    m.get("mask_rgb_path", ""),
             "boundary_csv_path": m.get("boundary_csv_path", ""),
         })
 
     df = pd.DataFrame(rows)
 
-    train_df, temp_df = train_test_split(
-        df,
+    # --- grupuri unice de pacienti ---
+    # un grup = un patient_session unic
+    # disease per grup = disease-ul majoritar (toate din același folder au același disease)
+    patient_df = (
+        df.groupby("patient_session")
+          .agg(disease=("disease", "first"))
+          .reset_index()
+    )
+
+    n_patients = len(patient_df)
+    print(f"\n  Total imagini:          {len(df)}")
+    print(f"  Total pacienti/sesiuni: {n_patients}")
+    print(f"  Medie imagini/pacient:  {len(df) / n_patients:.1f}")
+
+    # split stratificat pe disease, la nivel de pacient
+    train_pat, temp_pat = train_test_split(
+        patient_df,
         test_size=cfg.val_ratio + cfg.test_ratio,
-        stratify=df["disease"],
+        stratify=patient_df["disease"],
         random_state=SEED,
     )
 
     rel_test = cfg.test_ratio / (cfg.val_ratio + cfg.test_ratio)
-    val_df, test_df = train_test_split(
-        temp_df,
+    val_pat, test_pat = train_test_split(
+        temp_pat,
         test_size=rel_test,
-        stratify=temp_df["disease"],
+        stratify=temp_pat["disease"],
         random_state=SEED,
     )
+
+    train_sessions = set(train_pat["patient_session"])
+    val_sessions   = set(val_pat["patient_session"])
+    test_sessions  = set(test_pat["patient_session"])
+
+    # verifica no overlap
+    assert len(train_sessions & val_sessions)  == 0, "OVERLAP train/val!"
+    assert len(train_sessions & test_sessions) == 0, "OVERLAP train/test!"
+    assert len(val_sessions   & test_sessions) == 0, "OVERLAP val/test!"
+    print(f"\n  ✓ No patient overlap între splits!")
+
+    train_df = df[df["patient_session"].isin(train_sessions)].reset_index(drop=True)
+    val_df   = df[df["patient_session"].isin(val_sessions)].reset_index(drop=True)
+    test_df  = df[df["patient_session"].isin(test_sessions)].reset_index(drop=True)
 
     for name, sdf in [("train", train_df), ("val", val_df), ("test", test_df)]:
         path = os.path.join(cfg.splits_dir, f"{name}.csv")
         sdf.to_csv(path, index=False)
 
-    header = f"  {'Split':<8} {'Total':>6} {'AMD':>6} {'DME':>6} {'DRUSEN':>7} {'NORMAL':>7} {'w/bbox':>7} {'w/bound':>8} {'w/mask':>7}"
-    print(f"\n{header}")
-    print(f"  {'─' * 70}")
+    # salvam si patient-level splits pt referinta
+    train_pat.to_csv(os.path.join(cfg.splits_dir, "train_patients.csv"), index=False)
+    val_pat.to_csv(os.path.join(cfg.splits_dir,   "val_patients.csv"),   index=False)
+    test_pat.to_csv(os.path.join(cfg.splits_dir,  "test_patients.csv"),  index=False)
 
-    for name, sdf in [("train", train_df), ("val", val_df), ("test", test_df)]:
+    header = f"  {'Split':<8} {'Img':>6} {'Pat':>5} {'AMD':>6} {'DME':>6} {'DRUSEN':>7} {'NORMAL':>7} {'doc':>6} {'yolo':>6} {'none':>6}"
+    print(f"\n{header}")
+    print(f"  {'─' * 72}")
+
+    for name, sdf, pat_df in [
+        ("train", train_df, train_pat),
+        ("val",   val_df,   val_pat),
+        ("test",  test_df,  test_pat),
+    ]:
         dc = sdf["disease"].value_counts()
+        sc = sdf["bbox_source"].value_counts()
         print(
-            f"  {name:<8} {len(sdf):>6} "
+            f"  {name:<8} {len(sdf):>6} {len(pat_df):>5} "
             f"{dc.get('AMD', 0):>6} "
             f"{dc.get('DME', 0):>6} "
             f"{dc.get('DRUSEN', 0):>7} "
             f"{dc.get('NORMAL', 0):>7} "
-            f"{sdf['has_bbox'].sum():>7} "
-            f"{sdf['has_boundaries'].sum():>8} "
-            f"{sdf['has_mask'].sum():>7}"
+            f"{sc.get('doctor', 0):>6} "
+            f"{sc.get('yolo', 0):>6} "
+            f"{sc.get('none', 0):>6}"
         )
 
     print(f"\n  Splits saved to: {cfg.splits_dir}/")
+    print(f"\n  IMPORTANT: splits_v3 = patient-level (no data leakage)")
+    print(f"  splits_v2 = image-level (R@1 inflat artificial, nu folositi pt evaluare finala)")
+
     return train_df, val_df, test_df
 
 
@@ -493,7 +637,7 @@ def main():
         print(f"\n{'=' * 70}")
         print("  EXAMPLE JSON (first image with bbox + boundaries):")
         print(f"{'=' * 70}")
-        ex = examples[0]
+        ex   = examples[0]
         show = {k: v for k, v in ex.items() if k != "boundaries"}
         show["boundaries"] = "... (see individual JSON)" if ex["boundaries"] else None
         print(json.dumps(show, indent=2, ensure_ascii=False)[:2000])

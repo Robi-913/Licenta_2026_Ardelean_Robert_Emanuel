@@ -1,0 +1,24 @@
+2026-05-05 18:43:18,843 INFO    MainThread:30024 [wandb_setup.py:_flush():81] Current SDK version is 0.26.1
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_setup.py:_flush():81] Configure stats pid to 30024
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_init.py:setup_run_log_directory():723] Logging user logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260505_184318-8j95sxfn\logs\debug.log
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_init.py:setup_run_log_directory():724] Logging internal logs to D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\wandb\run-20260505_184318-8j95sxfn\logs\debug-internal.log
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_init.py:init():850] calling init triggers
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_init.py:init():855] wandb.init called with sweep_config: {}
+config: {'model': 'models/medsiglip-448', 'bs_effective': 16, 'epochs': 35, 'vision_lr': 5e-06, 'text_lr': 1e-05, 'head_lr': 0.0001, 'fusion_lr': 5e-05, 'lambda_sev': 0.3, 'lambda_cls': 0.3, 'label_smoothing': 0.1, 'hard_neg_weight': 2.0, 'prompt_swap_prob': 0.1, 'prompt_drop_prob': 0.1, 'scheduler': 'CosineAnnealingWarmRestarts', 'T_0': 5, 'T_mult': 2, 'sev_loss': 'SmoothL1', 'sev_activation': 'clamp(0,1)', 'wd_bias_norm': False, 'TTA': True, 'dataset': 'OCT5k', 'version': 'v4', '_wandb': {}}
+2026-05-05 18:43:18,844 INFO    MainThread:30024 [wandb_init.py:init():898] starting backend
+2026-05-05 18:43:21,167 INFO    MainThread:30024 [wandb_init.py:init():913] sending inform_init request
+2026-05-05 18:43:21,598 INFO    MainThread:30024 [wandb_init.py:init():918] backend started and connected
+2026-05-05 18:43:21,600 INFO    MainThread:30024 [wandb_init.py:init():988] updated telemetry
+2026-05-05 18:43:21,808 INFO    MainThread:30024 [wandb_init.py:init():1011] communicating run to backend with 90.0 second timeout
+2026-05-05 18:43:22,265 INFO    MainThread:30024 [wandb_init.py:init():1056] starting run threads in backend
+2026-05-05 18:43:22,395 INFO    MainThread:30024 [wandb_run.py:_console_start():2554] atexit reg
+2026-05-05 18:43:22,395 INFO    MainThread:30024 [wandb_run.py:_redirect():2403] redirect: wrap_raw
+2026-05-05 18:43:22,395 INFO    MainThread:30024 [wandb_run.py:_redirect():2472] Wrapping output streams.
+2026-05-05 18:43:22,395 INFO    MainThread:30024 [wandb_run.py:_redirect():2495] Redirects installed.
+2026-05-05 18:43:22,398 INFO    MainThread:30024 [wandb_init.py:init():1094] run started, returning control to user process
+2026-05-06 06:30:47,245 INFO    MainThread:30024 [wandb_run.py:_finish():2321] finishing run robi913-technical-university-of-cluj-napoca/licenta-medsiglip/8j95sxfn
+2026-05-06 06:30:47,249 INFO    MainThread:30024 [wandb_run.py:_atexit_cleanup():2520] got exitcode: 0
+2026-05-06 06:30:47,249 INFO    MainThread:30024 [wandb_run.py:_restore():2502] restore
+2026-05-06 06:30:47,249 INFO    MainThread:30024 [wandb_run.py:_restore():2508] restore done
+2026-05-06 06:30:49,412 INFO    MainThread:30024 [wandb_run.py:_footer_sync_info():3889] logging synced files

@@ -46,10 +46,10 @@ from src.utils.seed import set_seed
 # ---------- config ----------
 
 MODEL_PATH = "models/medsiglip-448"
-CHECKPOINT = "experiments/medsiglip_v3/ckpts/best.pth"
+CHECKPOINT = "experiments/medsiglip_v5/ckpts/best.pth"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 CLASSES = ["AMD", "DME", "DRUSEN", "NORMAL"]
-OUTPUT_DIR = "experiments/figures/gradcam"
+OUTPUT_DIR = "experiments/figures/gradcam_v5"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
@@ -173,7 +173,7 @@ def get_test_images(samples_per_class=2):
     ds = OCT5kDataset(
         split_csv="data/oct5k/splits/test.csv",
         split_json="data/oct5k/medgemma_prompts_split.json",
-        severity_json="data/oct5k/severity_scores.json",
+        severity_json="data/oct5k/severity_scores_combined.json",
         processor=processor,
         mode="eval",
     )
@@ -358,7 +358,7 @@ def main():
             print(f"    {disease}: pred={pred} ({conf:.0f}%) sev={sev:.0f}% {correct}")
 
         plt.suptitle(
-            f"MedSigLIP v2 — {args.method.upper()} Explainability",
+            f"MedSigLIP v5 — {args.method.upper()} Explainability",
             fontsize=16, y=1.01,
         )
         plt.tight_layout()

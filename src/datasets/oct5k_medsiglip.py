@@ -30,13 +30,21 @@ class OCT5kDataset(Dataset):
             raw_splits = json.load(f)
 
         self.prompts = {}
-        for entry in raw_splits:
-            if entry.get("split_valid") is True:
-                self.prompts[entry["image_path"]] = {
-                    "a": entry["prompt_a"],
-                    "b": entry["prompt_b"],
-                }
-
+        if isinstance(raw_splits, dict):
+            # format nou (v2): dict cu image_path ca key
+            for path, entry in raw_splits.items():
+                a = entry.get("a", "")
+                b = entry.get("b", "")
+                if a and b:
+                    self.prompts[path] = {"a": a, "b": b}
+        elif isinstance(raw_splits, list):
+            # format vechi (v1): lista cu split_valid
+            for entry in raw_splits:
+                if entry.get("split_valid") is True:
+                    self.prompts[entry["image_path"]] = {
+                        "a": entry.get("a", entry.get("prompt_a", "")),
+                        "b": entry.get("b", entry.get("prompt_b", "")),
+                    }
         with open(severity_json, "r", encoding="utf-8") as f:
             raw_sev = json.load(f)
 
@@ -44,7 +52,12 @@ class OCT5kDataset(Dataset):
         for entry in raw_sev:
             pct = entry.get("severity_percent")
             if entry.get("severity_valid") is True and pct is not None:
-                self.sev[entry["image_path"]] = pct
+                path = entry["image_path"].replace("/", "\\")
+                self.sev[path] = pct
+
+        self.prompts = {k.replace("/", "\\"): v for k, v in self.prompts.items()}
+
+        self.df["image_path"] = self.df["image_path"].apply(lambda p: p.replace("/", "\\"))
 
         usable = set(self.prompts.keys()) & set(self.sev.keys())
         self.df = self.df[self.df["image_path"].isin(usable)].reset_index(drop=True)

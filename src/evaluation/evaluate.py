@@ -60,13 +60,13 @@ class Config:
     sig_out = 256
 
     med_model = "models/medsiglip-448"
-    med_ckpt = "experiments/medsiglip_v3/ckpts/best.pth"
+    med_ckpt = "experiments/medsiglip_v5/ckpts/best.pth"
     med_csv = "data/oct5k/splits/test.csv"
     med_split_json = "data/oct5k/medgemma_prompts_split.json"
-    med_sev_json = "data/oct5k/severity_scores.json"
+    med_sev_json = "data/oct5k/severity_scores_combined.json"
 
     fig_dir = "experiments/figures/eval"
-    results_json = "experiments/eval_results.json"
+    results_json = "experiments/eval_results_v5.json"
 
     bs = 8
     workers = 0

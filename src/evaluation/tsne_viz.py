@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from sklearn.manifold import TSNE
 from tqdm import tqdm
 from transformers import AutoModel, AutoProcessor
+from peft import LoraConfig, get_peft_model  # Adăugat pentru suportul LoRA
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -25,13 +26,13 @@ from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 class Config:
     model_path = "models/medsiglip-448"
-    ckpt_path = "experiments/medsiglip_v3/ckpts/best.pth"
+    ckpt_path = "experiments/medsiglip_v13/ckpts/final_with_probe.pth"
 
-    test_csv = "data/oct5k/splits/test.csv"
-    split_json = "data/oct5k/medgemma_prompts_split.json"
-    sev_json = "data/oct5k/severity_scores.json"
+    test_csv = "data/oct5k/splits_v3/test.csv"
+    split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
+    sev_json = "data/oct5k/severity_scores_v2.json"
 
-    fig_dir = "experiments/figures/tsne"
+    fig_dir = "experiments/figures/tsne_v13"
 
     bs = 8
     workers = 0
@@ -46,28 +47,52 @@ cfg = Config()
 os.makedirs(cfg.fig_dir, exist_ok=True)
 
 
+# ---------- helper detecție probe ----------
+
+def _detect_cls_head(state_dict):
+    for k, v in state_dict.items():
+        if k == "cls_head.1.weight" or k == "cls_head.1.bias":
+            return v.shape[0] if len(v.shape) > 1 else v.shape[0]
+    return 256
+
+
 # ---------- model ----------
 
 class MedSigLIPMultiTask(nn.Module):
 
-    def __init__(self, model_path, n_classes=4):
+    def __init__(self, model_path, n_classes=4, cls_hidden=256):
         super().__init__()
         self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
+
+        # Aplicăm LoRA pe backbone
+        self.backbone = get_peft_model(self.backbone, LoraConfig(
+            r=16, lora_alpha=32, lora_dropout=0.05,
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
+            bias="none",
+        ))
 
         init_scale = torch.log(torch.tensor(1.0 / 0.07))
         self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
 
-        dim = self.backbone.config.vision_config.hidden_size
+        # Extragem dimensiunea reală având grijă la wrapper-ul LoRA
+        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
+        dim = bb.config.vision_config.hidden_size
 
         self.sev_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, 1),
+            nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
         )
 
-        self.cls_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, n_classes),
-        )
+        if cls_hidden == 512:
+            self.cls_head = nn.Sequential(
+                nn.LayerNorm(dim),
+                nn.Linear(dim, 512), nn.GELU(), nn.Dropout(0.3),
+                nn.Linear(512, 256), nn.GELU(), nn.Dropout(0.15),
+                nn.Linear(256, n_classes),
+            )
+        else:
+            self.cls_head = nn.Sequential(
+                nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
+            )
 
     def encode_image(self, pixel_values):
         out = self.backbone.get_image_features(pixel_values=pixel_values)
@@ -138,7 +163,7 @@ def plot_by_disease(pts, labels, classes):
             alpha=0.6, s=30, edgecolors="white", linewidth=0.3,
         )
 
-    ax.set_title("MedSigLIP Embeddings - t-SNE by Disease", fontsize=14)
+    ax.set_title("MedSigLIP v13 Embeddings - t-SNE by Disease", fontsize=14)
     ax.legend(fontsize=12, markerscale=1.5)
     ax.set_xlabel("t-SNE dim 1")
     ax.set_ylabel("t-SNE dim 2")
@@ -199,7 +224,7 @@ def plot_predictions(pts, labels, preds, classes):
                 c=palette[i], label=name,
                 alpha=0.6, s=30, edgecolors="white", linewidth=0.3,
             )
-        ax.set_title(f"MedSigLIP - {title}", fontsize=13)
+        ax.set_title(f"MedSigLIP v13 - {title}", fontsize=13)
         ax.legend(fontsize=11)
         ax.set_xlabel("t-SNE dim 1")
         ax.set_ylabel("t-SNE dim 2")
@@ -226,17 +251,24 @@ def main():
     set_seed()
 
     print(f"{'=' * 70}")
-    print("  t-SNE VISUALIZATION: MedSigLIP Embeddings")
+    print("  t-SNE VISUALIZATION: MedSigLIP v13 Embeddings")
     print(f"{'=' * 70}")
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
     ckpt = torch.load(cfg.ckpt_path, map_location="cpu", weights_only=False)
-    nc = ckpt.get("num_classes", 4)
-    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"])
+    state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
 
-    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc)
-    model.load_state_dict(ckpt["model"], strict=False)
+    nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME",
+                                                                                                      "DRUSEN",
+                                                                                                      "NORMAL"]
+
+    cls_hidden = _detect_cls_head(state_dict)
+    print(f"  Detected cls_head hidden_dim: {cls_hidden}")
+
+    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc, cls_hidden=cls_hidden)
+    model.load_state_dict(state_dict, strict=False)
     model = model.to(cfg.device)
     model.eval()
 

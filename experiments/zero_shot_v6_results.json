@@ -1,0 +1,263 @@
+{
+  "model": "MedSigLIP_v6",
+  "zero_shot_disease": {
+    "accuracy": 70.12,
+    "f1_macro": 0.6049,
+    "mean_confidence": 51.39,
+    "per_class_report": {
+      "AMD": {
+        "precision": 0.93,
+        "recall": 0.36328125,
+        "f1-score": 0.5224719101123596,
+        "support": 256.0
+      },
+      "DME": {
+        "precision": 0.7536945812807881,
+        "recall": 0.8947368421052632,
+        "f1-score": 0.8181818181818182,
+        "support": 171.0
+      },
+      "DRUSEN": {
+        "precision": 0.12844036697247707,
+        "recall": 0.9333333333333333,
+        "f1-score": 0.22580645161290322,
+        "support": 15.0
+      },
+      "NORMAL": {
+        "precision": 0.8065693430656934,
+        "recall": 0.9057377049180327,
+        "f1-score": 0.8532818532818532,
+        "support": 244.0
+      },
+      "accuracy": 0.7011661807580175,
+      "macro avg": {
+        "precision": 0.6546760728297396,
+        "recall": 0.7742722825891573,
+        "f1-score": 0.6049355082972336,
+        "support": 686.0
+      },
+      "weighted avg": {
+        "precision": 0.8246228842735147,
+        "recall": 0.7011661807580175,
+        "f1-score": 0.7073611791148989,
+        "support": 686.0
+      }
+    }
+  },
+  "zero_shot_biomarkers": {
+    "per_biomarker": {
+      "Fluid": {
+        "accuracy": 37.61,
+        "f1": 0.0093,
+        "precision": 0.0093,
+        "recall": 0.0093,
+        "n_positive": 2,
+        "n_negative": 684
+      },
+      "SoftDrusenPED": {
+        "accuracy": 70.41,
+        "f1": 0.0469,
+        "precision": 0.0469,
+        "recall": 0.0469,
+        "n_positive": 13,
+        "n_negative": 673
+      },
+      "PRLayerDisruption": {
+        "accuracy": 51.6,
+        "f1": 0.1309,
+        "precision": 0.1309,
+        "recall": 0.1309,
+        "n_positive": 27,
+        "n_negative": 659
+      },
+      "GeographicAtrophy": {
+        "accuracy": 49.42,
+        "f1": 0.028,
+        "precision": 0.028,
+        "recall": 0.028,
+        "n_positive": 6,
+        "n_negative": 680
+      },
+      "SoftDrusen": {
+        "accuracy": 41.25,
+        "f1": 0.1333,
+        "precision": 0.1333,
+        "recall": 0.1333,
+        "n_positive": 50,
+        "n_negative": 636
+      },
+      "ReticularDrusen": {
+        "accuracy": 41.69,
+        "f1": 0.061,
+        "precision": 0.061,
+        "recall": 0.061,
+        "n_positive": 16,
+        "n_negative": 670
+      },
+      "HyperfluorescentSpots": {
+        "accuracy": 43.29,
+        "f1": 0.0202,
+        "precision": 0.0202,
+        "recall": 0.0202,
+        "n_positive": 5,
+        "n_negative": 681
+      },
+      "HardDrusen": {
+        "accuracy": 46.5,
+        "f1": 0.1071,
+        "precision": 0.1071,
+        "recall": 0.1071,
+        "n_positive": 40,
+        "n_negative": 646
+      },
+      "ChoroidalFolds": {
+        "accuracy": 45.92,
+        "f1": 0.0313,
+        "precision": 0.0313,
+        "recall": 0.0313,
+        "n_positive": 8,
+        "n_negative": 678
+      }
+    },
+    "overall_accuracy": 47.52,
+    "overall_f1": 0.0652
+  },
+  "trained_biomarker_heads": {
+    "per_biomarker": {
+      "Fluid": {
+        "accuracy": 41.11,
+        "f1": 0.0098,
+        "precision": 0.0098,
+        "recall": 0.0098,
+        "n_positive": 2,
+        "n_negative": 684
+      },
+      "Geographicatrophy": {
+        "accuracy": 50.0,
+        "f1": 0.0338,
+        "precision": 0.0338,
+        "recall": 0.0338,
+        "n_positive": 6,
+        "n_negative": 680
+      },
+      "PRlayerdisruption": {
+        "accuracy": 55.98,
+        "f1": 0.1371,
+        "precision": 0.1371,
+        "recall": 0.1371,
+        "n_positive": 27,
+        "n_negative": 659
+      },
+      "SoftdrusenPED": {
+        "accuracy": 45.19,
+        "f1": 0.06,
+        "precision": 0.06,
+        "recall": 0.06,
+        "n_positive": 13,
+        "n_negative": 673
+      },
+      "Reticulardrusen": {
+        "accuracy": 55.39,
+        "f1": 0.0129,
+        "precision": 0.0129,
+        "recall": 0.0129,
+        "n_positive": 16,
+        "n_negative": 670
+      },
+      "Hyperfluorescentspots": {
+        "accuracy": 41.25,
+        "f1": 0.0195,
+        "precision": 0.0195,
+        "recall": 0.0195,
+        "n_positive": 5,
+        "n_negative": 681
+      },
+      "Softdrusen": {
+        "accuracy": 37.03,
+        "f1": 0.1818,
+        "precision": 0.1818,
+        "recall": 0.1818,
+        "n_positive": 50,
+        "n_negative": 636
+      },
+      "Harddrusen": {
+        "accuracy": 50.29,
+        "f1": 0.1862,
+        "precision": 0.1862,
+        "recall": 0.1862,
+        "n_positive": 40,
+        "n_negative": 646
+      },
+      "Choroidalfolds": {
+        "accuracy": 57.29,
+        "f1": 0.0266,
+        "precision": 0.0266,
+        "recall": 0.0266,
+        "n_positive": 8,
+        "n_negative": 678
+      }
+    },
+    "overall_accuracy": 48.17,
+    "overall_f1": 0.081
+  },
+  "disease_texts": {
+    "AMD": [
+      "OCT scan showing age-related macular degeneration",
+      "Retinal OCT with drusen deposits and macular degeneration",
+      "AMD with structural changes in the macula"
+    ],
+    "DME": [
+      "OCT scan showing diabetic macular edema",
+      "Retinal OCT with intraretinal fluid from diabetic macular edema",
+      "DME with retinal thickening and fluid accumulation"
+    ],
+    "DRUSEN": [
+      "OCT scan showing drusen deposits beneath the retinal pigment epithelium",
+      "Retinal OCT with early AMD drusen",
+      "Small drusen deposits in the retina without advanced disease"
+    ],
+    "NORMAL": [
+      "Normal retinal OCT with healthy layered structure",
+      "OCT scan showing no pathological findings",
+      "Healthy retina with normal layer thicknesses"
+    ]
+  },
+  "biomarker_texts": {
+    "Fluid": [
+      "There is fluid present in the retinal layers",
+      "There is no fluid in the retinal layers"
+    ],
+    "SoftDrusenPED": [
+      "There is a soft drusen pigment epithelial detachment present",
+      "There is no pigment epithelial detachment present"
+    ],
+    "PRLayerDisruption": [
+      "There is disruption of the photoreceptor layer",
+      "The photoreceptor layer is intact with no disruption"
+    ],
+    "GeographicAtrophy": [
+      "There is geographic atrophy present in the retina",
+      "There is no geographic atrophy in the retina"
+    ],
+    "SoftDrusen": [
+      "There are soft drusen deposits present",
+      "There are no soft drusen deposits present"
+    ],
+    "ReticularDrusen": [
+      "There are reticular drusen deposits present",
+      "There are no reticular drusen deposits present"
+    ],
+    "HyperfluorescentSpots": [
+      "There are hyperfluorescent spots present in the retina",
+      "There are no hyperfluorescent spots in the retina"
+    ],
+    "HardDrusen": [
+      "There are hard drusen deposits present",
+      "There are no hard drusen deposits present"
+    ],
+    "ChoroidalFolds": [
+      "There are choroidal folds present",
+      "There are no choroidal folds present"
+    ]
+  }
+}

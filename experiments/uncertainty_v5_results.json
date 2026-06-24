@@ -1,0 +1,42 @@
+{
+  "mc_samples": 20,
+  "total_images": 686,
+  "accuracy": 98.4,
+  "mean_confidence": 98.0,
+  "mean_entropy": 0.0757,
+  "mean_cls_std": 0.0045,
+  "mean_sev_std": 1.88,
+  "ece": 0.0062,
+  "correct_confidence": 98.25,
+  "incorrect_confidence": 81.94,
+  "per_class": {
+    "AMD": {
+      "count": 256,
+      "accuracy": 99.22,
+      "mean_confidence": 98.75,
+      "mean_entropy": 0.0539,
+      "mean_sev_std": 2.33
+    },
+    "DME": {
+      "count": 171,
+      "accuracy": 97.66,
+      "mean_confidence": 97.31,
+      "mean_entropy": 0.084,
+      "mean_sev_std": 2.77
+    },
+    "DRUSEN": {
+      "count": 15,
+      "accuracy": 100.0,
+      "mean_confidence": 96.56,
+      "mean_entropy": 0.1824,
+      "mean_sev_std": 1.48
+    },
+    "NORMAL": {
+      "count": 244,
+      "accuracy": 97.95,
+      "mean_confidence": 97.81,
+      "mean_entropy": 0.0862,
+      "mean_sev_std": 0.8
+    }
+  }
+}

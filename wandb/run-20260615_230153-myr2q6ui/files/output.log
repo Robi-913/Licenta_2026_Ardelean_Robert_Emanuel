@@ -1,0 +1,110 @@
+  OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 (1447 bbox, weight=3.0x)
+  OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Val: 863 | Classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Loading MIRAGE-Base...
+Creating MIRAGE model for inputs ['bscan']
+Image size: (512, 512), Patch size: (32, 32)
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 761, in hf_raise_for_status
+    response.raise_for_status()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://huggingface.co/jmorano/MIRAGE-Base/resolve/main/model.safetensors'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 743, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 628, in main
+    model = MIRAGEMultiTask(n_classes=nc).to(cfg.device)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 235, in __init__
+    self.mirage = MIRAGEhf.from_pretrained(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\hub_mixin.py", line 561, in from_pretrained
+    instance = cls._from_pretrained(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\hub_mixin.py", line 782, in _from_pretrained
+    model_file = hf_hub_download(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 997, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1148, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1782, in _raise_on_head_call_error
+    raise head_call_error
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1669, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1591, in get_hf_file_metadata
+    response = _httpx_follow_relative_redirects_with_backoff(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 692, in _httpx_follow_relative_redirects_with_backoff
+    hf_raise_for_status(response)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 835, in hf_raise_for_status
+    raise _format(RepositoryNotFoundError, message, response, repo_type=repo_type, repo_id=repo_id) from e
+huggingface_hub.errors.RepositoryNotFoundError: 404 Client Error. (Request ID: Root=1-6a305a36-3a3f18be7e5fbd065c526995;aaf065ce-f25e-48ba-88a0-198dab3be02d)
+
+Repository Not Found for url: https://huggingface.co/jmorano/MIRAGE-Base/resolve/main/model.safetensors.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated and your token has the required permissions.
+For more details, see https://huggingface.co/docs/huggingface_hub/authentication
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 761, in hf_raise_for_status
+    response.raise_for_status()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://huggingface.co/jmorano/MIRAGE-Base/resolve/main/model.safetensors'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 743, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 628, in main
+    model = MIRAGEMultiTask(n_classes=nc).to(cfg.device)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 235, in __init__
+    self.mirage = MIRAGEhf.from_pretrained(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\hub_mixin.py", line 561, in from_pretrained
+    instance = cls._from_pretrained(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\hub_mixin.py", line 782, in _from_pretrained
+    model_file = hf_hub_download(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 997, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1148, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1782, in _raise_on_head_call_error
+    raise head_call_error
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1669, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\file_download.py", line 1591, in get_hf_file_metadata
+    response = _httpx_follow_relative_redirects_with_backoff(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 692, in _httpx_follow_relative_redirects_with_backoff
+    hf_raise_for_status(response)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\huggingface_hub\utils\_http.py", line 835, in hf_raise_for_status
+    raise _format(RepositoryNotFoundError, message, response, repo_type=repo_type, repo_id=repo_id) from e
+huggingface_hub.errors.RepositoryNotFoundError: 404 Client Error. (Request ID: Root=1-6a305a36-3a3f18be7e5fbd065c526995;aaf065ce-f25e-48ba-88a0-198dab3be02d)
+
+Repository Not Found for url: https://huggingface.co/jmorano/MIRAGE-Base/resolve/main/model.safetensors.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated and your token has the required permissions.
+For more details, see https://huggingface.co/docs/huggingface_hub/authentication

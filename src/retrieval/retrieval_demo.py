@@ -1,5 +1,6 @@
+
 """
-Retrieval Demo — MedSigLIP v3
+Retrieval Demo — MedSigLIP v5/v13 (Updated with LoRA & Probe)
 
 Genereaza vizualizari de retrieval:
   1. I2T Grid: imagine query -> top 3 texte gasite
@@ -30,6 +31,7 @@ from torch.utils.data import DataLoader
 from PIL import Image, ImageFilter
 from tqdm import tqdm
 from transformers import AutoModel, AutoProcessor
+from peft import LoraConfig, get_peft_model  # Adaugat pentru LoRA
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -41,14 +43,14 @@ from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 class Config:
     model_path = "models/medsiglip-448"
-    checkpoint = "experiments/medsiglip_v3/ckpts/best.pth"
+    checkpoint = "experiments/medsiglip_v13/ckpts/final_with_probe.pth" # Actualizeaza cu noul tau checkpoint
 
     test_csv = "data/oct5k/splits/test.csv"
     split_json = "data/oct5k/medgemma_prompts_split.json"
-    severity_json = "data/oct5k/severity_scores.json"
+    severity_json = "data/oct5k/severity_scores_combined.json"
 
-    output_dir = "experiments/figures/retrieval"
-    results_json = "experiments/retrieval_results.json"
+    output_dir = "experiments/figures/retrieval_demo_lora"
+    results_json = "experiments/retrieval_demo_results.json"
 
     samples_per_class = 2
     top_k = 3
@@ -91,25 +93,53 @@ class CrossAttentionFusion(nn.Module):
         return F.normalize(fused, p=2, dim=-1)
 
 
+# ---------- helper pentru detecția probe-ului ----------
+
+def _detect_cls_head(state_dict):
+    for k, v in state_dict.items():
+        if k == "cls_head.1.weight" or k == "cls_head.1.bias":
+            return v.shape[0] if len(v.shape) > 1 else v.shape[0]
+    return 256
+
+
 # ---------- model ----------
 
 class MedSigLIPMultiTask(nn.Module):
 
-    def __init__(self, model_path, n_classes=4):
+    def __init__(self, model_path, n_classes=4, cls_hidden=256):
         super().__init__()
         self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
+        
+        # Aplicam LoRA
+        self.backbone = get_peft_model(self.backbone, LoraConfig(
+            r=16, lora_alpha=32, lora_dropout=0.05,
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
+            bias="none",
+        ))
+
         init_scale = torch.log(torch.tensor(1.0 / 0.07))
         self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
-        dim = self.backbone.config.vision_config.hidden_size
+        
+        # Prelua dim-ul corect cand folosim LoRA (base_model.model)
+        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
+        dim = bb.config.vision_config.hidden_size
 
         self.sev_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, 1),
+            nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
         )
-        self.cls_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, n_classes),
-        )
+        
+        if cls_hidden == 512:
+            self.cls_head = nn.Sequential(
+                nn.LayerNorm(dim),
+                nn.Linear(dim, 512), nn.GELU(), nn.Dropout(0.3),
+                nn.Linear(512, 256), nn.GELU(), nn.Dropout(0.15),
+                nn.Linear(256, n_classes),
+            )
+        else:
+            self.cls_head = nn.Sequential(
+                nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
+            )
+            
         self.fusion = CrossAttentionFusion(dim, heads=4, dropout=0.1)
 
     def encode_image(self, pixel_values):
@@ -263,7 +293,7 @@ def plot_i2t_grid(dataset, img_emb, txt_emb, labels, classes):
         axes[i, 1].set_title(f"Top {cfg.top_k} Retrieved Texts", fontsize=12)
         axes[i, 1].axis("off")
 
-    plt.suptitle("Image-to-Text Retrieval (I2T) — CrossAttention Fusion", fontsize=16, y=1.01)
+    plt.suptitle("Image-to-Text Retrieval (I2T)", fontsize=16, y=1.01)
     plt.tight_layout()
     plt.savefig(f"{cfg.output_dir}/i2t_grid.png", dpi=150, bbox_inches="tight")
     plt.close()
@@ -333,7 +363,7 @@ def plot_t2i_grid(dataset, img_emb, txt_emb, labels, classes):
             )
             axes[i, rank + 1].axis("off")
 
-    plt.suptitle("Text-to-Image Retrieval (T2I) — CrossAttention Fusion", fontsize=16, y=1.01)
+    plt.suptitle("Text-to-Image Retrieval (T2I)", fontsize=16, y=1.01)
     plt.tight_layout()
     plt.savefig(f"{cfg.output_dir}/t2i_grid.png", dpi=150, bbox_inches="tight")
     plt.close()
@@ -355,7 +385,7 @@ def plot_per_class_metrics(metrics, classes):
                 continue
             vals = [metrics["per_class"][cls_name].get(f"{tag}_R@{k}", 0) for k in [1, 5, 10]]
             axes[ax_idx].bar(x + cls_idx * width, vals, width,
-                            label=cls_name, color=colors[cls_idx])
+                             label=cls_name, color=colors[cls_idx])
 
         axes[ax_idx].set_xticks(x + width * 1.5)
         axes[ax_idx].set_xticklabels(["R@1", "R@5", "R@10"])
@@ -395,7 +425,7 @@ def plot_similarity_dist(img_emb, txt_emb, labels):
             label="Different class (sampled)", density=True)
     ax.set_xlabel("Cosine Similarity")
     ax.set_ylabel("Density")
-    ax.set_title("Similarity Distribution: Same vs Different Class (CrossAttention Fusion)")
+    ax.set_title("Similarity Distribution: Same vs Different Class")
     ax.legend()
     ax.grid(alpha=0.3)
 
@@ -466,17 +496,25 @@ def main():
     set_seed()
 
     print(f"{'=' * 60}")
-    print("  RETRIEVAL DEMO: MedSigLIP v3 (CrossAttention Fusion)")
+    print("  RETRIEVAL DEMO: MedSigLIP Updated (LoRA & Probe)")
     print(f"{'=' * 60}")
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
+    # Incarcare checkpoint adaptabila la formatul nou
     ckpt = torch.load(cfg.checkpoint, map_location="cpu", weights_only=False)
-    nc = ckpt.get("num_classes", 4)
-    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"])
+    state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    
+    nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
 
-    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc)
-    model.load_state_dict(ckpt["model"])
+    # Detecteaza formatul probe-ului
+    cls_hidden = _detect_cls_head(state_dict)
+    print(f"  Detected cls_head hidden_dim: {cls_hidden}")
+
+    # Initializeaza noul model cu LoRA si Probe
+    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc, cls_hidden=cls_hidden)
+    model.load_state_dict(state_dict)
     model = model.to(cfg.device)
     model.eval()
     print(f"  Model on {cfg.device}")
