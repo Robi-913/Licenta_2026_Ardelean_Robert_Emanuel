@@ -26,7 +26,7 @@ from src.utils.seed import set_seed
 # ---------- config ----------
 
 class Config:
-    api_key     = "AQ.Ab8RN6IwlD-57rBm1qVihCp_agLMoBlCujyXJOpR_J4tVAXs9g"
+    api_key     = "AQ....."
     model       = "gemini-3.1-flash-lite"
 
     input_json  = "data/OCT5k/medgemma_prompts_v2_27b.json"
