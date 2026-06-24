@@ -1,10 +1,30 @@
+"""
+MedSigLIP v13 — LoRA + BBox Oversampling + lam_cls=1.0 + 27B prompts
+
+Identic cu v12 dar cu prompturi MedGemma 27B (in loc de 4B).
+Ablatie: v12 (4B) = 80.0, v13 (27B) = 80.1 — practic identice.
+
+Best results (splits_v3, fara leakage):
+  Val:  R@1=86.7% | Cls=75.2% | SevMAE=28.1% | Score=80.1
+  Test: R@1=84.0% | Cls=83.2% | SevMAE=24.1% | Score=81.8
+
+v13 changes vs v12:
+  - split_json: medgemma_prompts_split_v2_27b.json (era _4b)
+  - Restul identic
+
+v12 changes vs v10/v11:
+  - lam_cls = 1.0 (era 0.3). cls_head primea prea putin gradient.
+  - BBox oversampling in antrenarea normala (WeightedRandomSampler, bbox_weight=3.0).
+  - O singura faza de antrenare (fara Phase 2 separata).
+  - bs=16, accum=4 (effective 64), LoRA r=16, splits_v3 (fara leakage).
+"""
+
 import os
 import sys
 import gc
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
@@ -16,54 +36,25 @@ from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 from transformers import AutoModel, AutoProcessor
-from PIL import Image
 from peft import LoraConfig, get_peft_model
-
-import torchvision.transforms as T
-
-# MIRAGE
-sys.path.insert(0, os.path.abspath("models/mirage"))
-from huggingface_hub import PyTorchModelHubMixin
-from mirage_hf import MIRAGEWrapper
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
-from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
+from src.datasets.oct5k_medsiglip import make_loaders, OCT5kDataset, collate_oct5k
 from src.losses.siglip_loss import SigLIPLoss, contrastive_accuracy
 from src.utils.seed import set_seed
-
-
-# ---------- MIRAGE HuggingFace loader ----------
-
-class MIRAGEhf(MIRAGEWrapper, PyTorchModelHubMixin):
-    def __init__(self, input_size=512, patch_size=32, modalities="bscan", size="base"):
-        super().__init__(
-            input_size=input_size,
-            patch_size=patch_size,
-            modalities=modalities,
-            size=size,
-        )
 
 
 # ---------- config ----------
 
 class Config:
-    # MIRAGE image encoder
-    mirage_model = "models/mirage/MIRAGE-Large"
-    mirage_size = "large"
-    mirage_dim = 1024
-    mirage_input_size = 512
-
-    # MedSigLIP text encoder (inghetat, doar pt text)
-    medsiglip_path = "models/medsiglip-448"
-    text_dim = 1152
-
+    model_path = "models/medsiglip-448"
     splits_dir = "data/oct5k/splits_v3"
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
     severity_json = "data/oct5k/severity_scores_v2.json"
 
-    bs = 128
-    accum = 2
+    bs = 16
+    accum = 4          # effective 64
 
     epochs = 30
     warmup = 3
@@ -71,23 +62,31 @@ class Config:
     grad_clip = 1.0
     min_delta = 0.001
 
-    proj_lr = 5e-4     # projection layer (random init, needs higher lr)
     head_lr = 1e-4
     fusion_lr = 5e-5
     wd = 0.01
     min_lr = 1e-7
 
+    # LoRA
+    lora_r = 16
+    lora_alpha = 32
+    lora_dropout = 0.05
+    lora_lr = 1.5e-4
+
+    # loss weights
     lam_sev = 0.3
     lam_cls = 1.0
 
+    # bbox oversampling
     bbox_weight = 3.0
+
     max_scale = 3.0
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     amp = torch.cuda.is_available()
     workers = 0
 
-    save_dir = "experiments/medsiglip_v14_mirage"
+    save_dir = "experiments/medsiglip_v13"
     resume = None
 
 
@@ -95,98 +94,19 @@ cfg = Config()
 os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
 
 
-# ---------- MIRAGE preprocessing ----------
-
-mirage_transform_train = T.Compose([
-    T.Resize((cfg.mirage_input_size, cfg.mirage_input_size)),
-    T.Grayscale(num_output_channels=1),
-    T.RandomHorizontalFlip(p=0.5),
-    T.ToTensor(),  # [0, 1]
-])
-
-mirage_transform_eval = T.Compose([
-    T.Resize((cfg.mirage_input_size, cfg.mirage_input_size)),
-    T.Grayscale(num_output_channels=1),
-    T.ToTensor(),
-])
-
-
-# ---------- dataset (MIRAGE images + MedSigLIP tokens) ----------
-
-class OCT5kMIRAGE(OCT5kDataset):
-    """
-    Extinde OCT5kDataset: imaginea e preprocedata pt MIRAGE (512x512, grayscale, [0,1]).
-    Textul e tokenizat cu MedSigLIP tokenizer (ca inainte).
-    """
-
-    def __init__(self, split_csv, split_json, severity_json, processor,
-                 img_dirs=None, mode="train"):
-        super().__init__(split_csv, split_json, severity_json, processor,
-                         img_dirs, mode)
-        self.mirage_transform = mirage_transform_train if mode == "train" else mirage_transform_eval
-
-    def __getitem__(self, idx):
-        row = self.df.iloc[idx]
-        img_path = row["image_path"]
-        label = self.lbl_map[row["disease"]]
-
-        disk = self._locate(img_path)
-        if disk is None:
-            disk = row.get("image_disk_path", "")
-            if not os.path.exists(disk):
-                raise FileNotFoundError(f"Cannot find: {img_path}")
-
-        img = Image.open(disk).convert("RGB")
-
-        # GaussianBlur + AutoCrop (ca in pipeline-ul original)
-        from PIL import ImageFilter
-        img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
-        img = self._auto_crop(img)
-
-        # MIRAGE transform (resize 512, grayscale, to_tensor)
-        # flip e inclus in transform pt train
-        pixels = self.mirage_transform(img)   # [1, 512, 512]
-
-        # text tokenizat cu MedSigLIP
-        pair = self.prompts[img_path]
-        ids_a, mask_a = self._tok(pair["a"])
-        ids_b, mask_b = self._tok(pair["b"])
-
-        sev = self.sev[img_path] / 100.0
-
-        return {
-            "pixel_values": pixels,          # [1, 512, 512] pt MIRAGE
-            "input_ids_a": ids_a,
-            "attention_mask_a": mask_a,
-            "input_ids_b": ids_b,
-            "attention_mask_b": mask_b,
-            "label": label,
-            "severity": torch.tensor(sev, dtype=torch.float32),
-        }
-
-
-def collate_mirage(batch):
-    return {
-        "pixel_values": torch.stack([b["pixel_values"] for b in batch]),
-        "input_ids_a": torch.stack([b["input_ids_a"] for b in batch]),
-        "attention_mask_a": torch.stack([b["attention_mask_a"] for b in batch]),
-        "input_ids_b": torch.stack([b["input_ids_b"] for b in batch]),
-        "attention_mask_b": torch.stack([b["attention_mask_b"] for b in batch]),
-        "label": torch.tensor([b["label"] for b in batch]),
-        "severity": torch.stack([b["severity"] for b in batch]),
-    }
-
-
 # ---------- model ----------
 
 class CrossAttentionFusion(nn.Module):
+
     def __init__(self, dim, heads=4, dropout=0.1):
         super().__init__()
         self.attn_a2b = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
         self.attn_b2a = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
         self.norm = nn.LayerNorm(dim)
         self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
-        self.proj = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim))
+        self.proj = nn.Sequential(
+            nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim)
+        )
 
     def forward(self, emb_a, emb_b):
         a, b = emb_a.unsqueeze(1), emb_b.unsqueeze(1)
@@ -200,139 +120,101 @@ class CrossAttentionFusion(nn.Module):
         return F.normalize(fused, p=2, dim=-1)
 
 
-class MIRAGEMultiTask(nn.Module):
-    """
-    MIRAGE (image) + MedSigLIP (text) + Projection + Fusion + Heads
+class MedSigLIPMultiTask(nn.Module):
 
-    MIRAGE: inghetat, feature extractor OCT
-    MedSigLIP text: inghetat
-    Projection: 768 -> 1152 (trainable, aliniaza spatiile)
-    Fusion + cls_head + sev_head: trainable
-    """
-
-    def __init__(self, n_classes=4):
+    def __init__(self, model_path, n_classes=4):
         super().__init__()
 
-        # MIRAGE image encoder + LoRA
-        print("  Loading MIRAGE-Large...")
-        self.mirage = MIRAGEhf.from_pretrained(
-            cfg.mirage_model,
-            input_size=cfg.mirage_input_size,
-            patch_size=32,
-            modalities="bscan",
-            size=cfg.mirage_size,
+        self.backbone = AutoModel.from_pretrained(
+            model_path, torch_dtype=torch.float32,
         )
 
-        # LoRA pe MIRAGE (adaptare pt datele tale)
-        self.mirage.model = get_peft_model(self.mirage.model, LoraConfig(
-            r=8,
-            lora_alpha=16,
-            lora_dropout=0.05,
-            target_modules=["qkv", "proj"],
+        # LoRA pe vision + text (q/k/v/out_proj)
+        lora_cfg = LoraConfig(
+            r=cfg.lora_r,
+            lora_alpha=cfg.lora_alpha,
+            lora_dropout=cfg.lora_dropout,
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
             bias="none",
-        ))
-        self.mirage.model.print_trainable_parameters()
-
-        # for p in self.mirage.parameters():
-        #     p.requires_grad = False
-        # self.mirage.eval()
-
-        n_mirage = sum(p.numel() for p in self.mirage.parameters())
-        print(f"    MIRAGE params: {n_mirage:,} (LoRA trainable)")
-
-        # MedSigLIP text encoder (INGHETAT)
-        print("  Loading MedSigLIP text encoder...")
-        self.text_backbone = AutoModel.from_pretrained(
-            cfg.medsiglip_path, torch_dtype=torch.float32,
         )
-        for p in self.text_backbone.parameters():
-            p.requires_grad = False
-        self.text_backbone.eval()
-
-        # projection MIRAGE dim -> MedSigLIP text dim
-        self.img_proj = nn.Sequential(
-            nn.LayerNorm(cfg.mirage_dim),
-            nn.Linear(cfg.mirage_dim, cfg.text_dim),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(cfg.text_dim, cfg.text_dim),
-        )
+        self.backbone = get_peft_model(self.backbone, lora_cfg)
 
         init_scale = torch.log(torch.tensor(1.0 / 0.07))
         self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
 
-        # heads pe MIRAGE features (nu pe projected — mai directe)
+        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
+        dim = bb.config.vision_config.hidden_size
+
+        # heads pe features NE-normalizate + LayerNorm la intrare
         self.sev_head = nn.Sequential(
-            nn.LayerNorm(cfg.mirage_dim),
-            nn.Linear(cfg.mirage_dim, 256),
+            nn.LayerNorm(dim),
+            nn.Linear(dim, 256),
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(256, 1),
         )
+
         self.cls_head = nn.Sequential(
-            nn.LayerNorm(cfg.mirage_dim),
-            nn.Linear(cfg.mirage_dim, 256),
+            nn.LayerNorm(dim),
+            nn.Linear(dim, 256),
             nn.ReLU(),
             nn.Dropout(0.1),
             nn.Linear(256, n_classes),
         )
 
-        self.fusion = CrossAttentionFusion(cfg.text_dim, heads=4, dropout=0.1)
+        self.fusion = CrossAttentionFusion(dim, heads=4, dropout=0.1)
 
-        n_train = sum(p.numel() for p in self.parameters() if p.requires_grad)
         n_total = sum(p.numel() for p in self.parameters())
-        print(f"    Total: {n_total:,} | Trainable: {n_train:,}")
-        print(f"    Projection: {cfg.mirage_dim} -> {cfg.text_dim}")
+        n_train = sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+        print(f"  MedSigLIP v13:")
+        print(f"    Total: {n_total:,} | Trainable: {n_train:,} | Emb dim: {dim}")
+        print(f"    Effective batch: {cfg.bs} x {cfg.accum} = {cfg.bs * cfg.accum}")
+        print(f"    lam_cls={cfg.lam_cls} | bbox_weight={cfg.bbox_weight}")
+        self.backbone.print_trainable_parameters()
 
     def encode_image(self, pixel_values):
-        tokens = self.mirage({"bscan": pixel_values})
-        global_token = tokens[:, -1, :]
-        return global_token
-
-    # def encode_image(self, pixel_values):
-    #     with torch.no_grad():
-    #         tokens = self.mirage({"bscan": pixel_values})
-    #     global_token = tokens[:, -1, :]
-    #     return global_token
+        out = self.backbone.get_image_features(pixel_values=pixel_values)
+        if hasattr(out, "pooler_output"):
+            out = out.pooler_output
+        elif hasattr(out, "last_hidden_state"):
+            out = out.last_hidden_state[:, 0]
+        return out   # ne-normalizat
 
     def encode_text(self, input_ids, attention_mask):
-        """MedSigLIP text encode (inghetat)"""
-        with torch.no_grad():
-            out = self.text_backbone.get_text_features(
-                input_ids=input_ids, attention_mask=attention_mask,
-            )
-            if hasattr(out, "pooler_output"):
-                out = out.pooler_output
-            elif hasattr(out, "last_hidden_state"):
-                out = out.last_hidden_state[:, 0]
+        out = self.backbone.get_text_features(
+            input_ids=input_ids, attention_mask=attention_mask,
+        )
+        if hasattr(out, "pooler_output"):
+            out = out.pooler_output
+        elif hasattr(out, "last_hidden_state"):
+            out = out.last_hidden_state[:, 0]
         return F.normalize(out, p=2, dim=-1)
 
     def forward(self, pixel_values, ids_a, mask_a, ids_b, mask_b):
-        # image: MIRAGE features (768) -> projected (1152)
-        mirage_feat = self.encode_image(pixel_values)  # [B, 768]
-        img_proj = self.img_proj(mirage_feat)            # [B, 1152]
-        img_emb = F.normalize(img_proj, p=2, dim=-1)    # normalizat pt contrastive
-
-        # text: MedSigLIP (inghetat)
+        pooled = self.encode_image(pixel_values)
+        img_emb = F.normalize(pooled, p=2, dim=-1)   # normalizat doar pt contrastive
         ea = self.encode_text(ids_a, mask_a)
         eb = self.encode_text(ids_b, mask_b)
         merged = self.fusion(ea, eb)
-
-        # heads pe MIRAGE features directe (nu projected)
-        sev = self.sev_head(mirage_feat).squeeze(-1).clamp(0, 1)
-        cls = self.cls_head(mirage_feat)
-
+        sev = self.sev_head(pooled).squeeze(-1).clamp(0, 1)
+        cls = self.cls_head(pooled)
         return img_emb, ea, eb, merged, self.logit_scale, sev, cls
 
 
-# ---------- data loaders ----------
+# ---------- train loader cu bbox oversampling ----------
 
-def make_train_loader(proc):
+def make_train_loader_weighted(proc, cfg):
     train_csv = f"{cfg.splits_dir}/train.csv"
-    ds = OCT5kMIRAGE(
-        split_csv=train_csv, split_json=cfg.split_json,
-        severity_json=cfg.severity_json, processor=proc, mode="train",
+
+    ds = OCT5kDataset(
+        split_csv=train_csv,
+        split_json=cfg.split_json,
+        severity_json=cfg.severity_json,
+        processor=proc,
+        mode="train",
     )
+
     n_bbox = 0
     if "has_bbox" in ds.df.columns:
         weights = []
@@ -344,50 +226,39 @@ def make_train_loader(proc):
                 weights.append(1.0)
     else:
         weights = [1.0] * len(ds)
+
     sampler = WeightedRandomSampler(weights, num_samples=len(ds), replacement=True)
-    print(f"  Train: {len(ds)} ({n_bbox} bbox, weight={cfg.bbox_weight}x)")
+
+    print(f"  Train: {len(ds)} imagini ({n_bbox} cu bbox, weight={cfg.bbox_weight}x)")
+
     return ds, DataLoader(
-        ds, batch_size=cfg.bs, sampler=sampler,
-        num_workers=cfg.workers, pin_memory=True,
-        collate_fn=collate_mirage, drop_last=True,
+        ds,
+        batch_size=cfg.bs,
+        sampler=sampler,
+        num_workers=cfg.workers,
+        pin_memory=True,
+        collate_fn=collate_oct5k,
+        drop_last=True,
     )
-
-
-def make_eval_loader(proc, split):
-    csv = f"{cfg.splits_dir}/{split}.csv"
-    if not os.path.exists(csv):
-        return None, None
-    ds = OCT5kMIRAGE(
-        split_csv=csv, split_json=cfg.split_json,
-        severity_json=cfg.severity_json, processor=proc, mode="eval",
-    )
-    dl = DataLoader(
-        ds, batch_size=cfg.bs, shuffle=False,
-        num_workers=cfg.workers, pin_memory=True,
-        collate_fn=collate_mirage, drop_last=False,
-    )
-    return ds, dl
 
 
 # ---------- optimizer ----------
 
 def make_optimizer(model):
-    lora_params, lora_nd = [], []
-    proj_params, proj_nd = [], []
-    fusion_params, fusion_nd = [], []
-    head_params, head_nd = [], []
+    lora_decay, lora_nodecay = [], []
+    fusion_decay, fusion_nodecay = [], []
+    head_decay, head_nodecay = [], []
 
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
+
         if "lora" in name.lower():
-            target_d, target_nd = lora_params, lora_nd
-        elif "img_proj" in name:
-            target_d, target_nd = proj_params, proj_nd
+            target_d, target_nd = lora_decay, lora_nodecay
         elif "fusion" in name:
-            target_d, target_nd = fusion_params, fusion_nd
+            target_d, target_nd = fusion_decay, fusion_nodecay
         else:
-            target_d, target_nd = head_params, head_nd
+            target_d, target_nd = head_decay, head_nodecay
 
         if p.ndim <= 1 or "bias" in name or "norm" in name:
             target_nd.append(p)
@@ -395,14 +266,12 @@ def make_optimizer(model):
             target_d.append(p)
 
     groups = [
-        {"params": lora_params,   "lr": 1e-4,         "weight_decay": cfg.wd, "name": "mirage_lora"},
-        {"params": lora_nd,       "lr": 1e-4,         "weight_decay": 0.0,    "name": "mirage_lora_nd"},
-        {"params": proj_params,   "lr": cfg.proj_lr,   "weight_decay": cfg.wd, "name": "projection"},
-        {"params": proj_nd,       "lr": cfg.proj_lr,   "weight_decay": 0.0,    "name": "projection_nd"},
-        {"params": fusion_params, "lr": cfg.fusion_lr,  "weight_decay": cfg.wd, "name": "fusion"},
-        {"params": fusion_nd,     "lr": cfg.fusion_lr,  "weight_decay": 0.0,    "name": "fusion_nd"},
-        {"params": head_params,   "lr": cfg.head_lr,    "weight_decay": cfg.wd, "name": "heads"},
-        {"params": head_nd,       "lr": cfg.head_lr,    "weight_decay": 0.0,    "name": "heads_nd"},
+        {"params": lora_decay,    "lr": cfg.lora_lr,   "weight_decay": cfg.wd,  "name": "lora"},
+        {"params": lora_nodecay,  "lr": cfg.lora_lr,   "weight_decay": 0.0,     "name": "lora_nd"},
+        {"params": fusion_decay,  "lr": cfg.fusion_lr,  "weight_decay": cfg.wd,  "name": "fusion"},
+        {"params": fusion_nodecay,"lr": cfg.fusion_lr,  "weight_decay": 0.0,     "name": "fusion_nd"},
+        {"params": head_decay,    "lr": cfg.head_lr,    "weight_decay": cfg.wd,  "name": "heads"},
+        {"params": head_nodecay,  "lr": cfg.head_lr,    "weight_decay": 0.0,     "name": "heads_nd"},
     ]
     groups = [g for g in groups if g["params"]]
 
@@ -428,7 +297,8 @@ def clear_mem():
 def eval_all(model, loader):
     model.eval()
     all_img, all_txt, all_lbl = [], [], []
-    all_sp, all_st, all_cp, all_ct = [], [], [], []
+    all_sp, all_st = [], []
+    all_cp, all_ct = [], []
 
     for batch in tqdm(loader, desc="  Eval", leave=False):
         pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
@@ -448,6 +318,8 @@ def eval_all(model, loader):
         all_cp.append(cl.argmax(1).cpu())
         all_ct.append(batch["label"])
 
+        del pv, ia, ma, ib, mb, ie, ea, eb, te, sp, cl
+
     clear_mem()
 
     img_emb = torch.cat(all_img)
@@ -457,6 +329,7 @@ def eval_all(model, loader):
     sim = img_emb @ txt_emb.T
     n = sim.shape[0]
     out = {}
+
     for tag, s in [("I2T", sim), ("T2I", sim.T)]:
         for k in [1, 5, 10]:
             _, top = s.topk(k, dim=1)
@@ -478,17 +351,18 @@ def eval_all(model, loader):
 
 def run_train(model, loader, c_loss, opt, scaler, ep):
     model.train()
-    model.text_backbone.eval()
-
     tot_l, tot_c, tot_s, tot_cl = 0, 0, 0, 0
     sum_i2t, sum_t2i = 0, 0
     steps = 0
+
     cls_fn = nn.CrossEntropyLoss()
     sev_fn = nn.SmoothL1Loss()
+
     opt.zero_grad()
 
     pbar = tqdm(loader, desc=f"Ep {ep + 1}/{cfg.epochs}")
     for step, batch in enumerate(pbar):
+
         pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
         ia = batch["input_ids_a"].to(cfg.device, non_blocking=True)
         ma = batch["attention_mask_a"].to(cfg.device, non_blocking=True)
@@ -534,12 +408,15 @@ def run_train(model, loader, c_loss, opt, scaler, ep):
         del ie, ea, eb, merged, sp, cl, loss, loss_div, lc, lc_a, lc_b, lc_m, ls, lcl
 
         pbar.set_postfix(
-            L=f"{tot_l / steps:.3f}", C=f"{tot_c / steps:.3f}",
-            S=f"{tot_s / steps:.3f}", CL=f"{tot_cl / steps:.3f}",
+            L=f"{tot_l / steps:.3f}",
+            C=f"{tot_c / steps:.3f}",
+            S=f"{tot_s / steps:.3f}",
+            CL=f"{tot_cl / steps:.3f}",
             i2t=f"{sum_i2t / steps:.0f}%",
         )
 
     clear_mem()
+
     return {
         "loss": tot_l / steps, "loss_c": tot_c / steps,
         "loss_s": tot_s / steps, "loss_cl": tot_cl / steps,
@@ -555,6 +432,7 @@ def run_val(model, loader, c_loss):
     tot_l, tot_c, tot_s, tot_cl = 0, 0, 0, 0
     sum_i2t, sum_t2i = 0, 0
     steps = 0
+
     cls_fn = nn.CrossEntropyLoss()
     sev_fn = nn.SmoothL1Loss()
 
@@ -586,7 +464,11 @@ def run_val(model, loader, c_loss):
         sum_t2i += t2i
         steps += 1
 
+        del pv, ia, ma, ib, mb, labels, severity
+        del ie, ea, eb, merged, sp, cl, loss, lc, lc_a, lc_b, lc_m, ls, lcl
+
     clear_mem()
+
     return {
         "loss": tot_l / steps, "loss_c": tot_c / steps,
         "loss_s": tot_s / steps, "loss_cl": tot_cl / steps,
@@ -594,43 +476,98 @@ def run_val(model, loader, c_loss):
     }
 
 
+# ---------- plots ----------
+
+def save_plots(hist):
+    ep = range(1, len(hist["train_loss"]) + 1)
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+    axes[0, 0].plot(ep, hist["train_loss"], label="Train", marker="o", ms=2)
+    axes[0, 0].plot(ep, hist["val_loss"], label="Val", marker="o", ms=2)
+    axes[0, 0].set(title="Total Loss", xlabel="Epoch")
+    axes[0, 0].legend(); axes[0, 0].grid(alpha=0.3)
+
+    axes[0, 1].plot(ep, hist["train_loss_c"], label="Contrastive", marker="o", ms=2)
+    axes[0, 1].plot(ep, hist["train_loss_s"], label="Severity", marker="o", ms=2)
+    axes[0, 1].plot(ep, hist["train_loss_cl"], label="Classification", marker="o", ms=2)
+    axes[0, 1].set(title="Train Loss Breakdown", xlabel="Epoch")
+    axes[0, 1].legend(); axes[0, 1].grid(alpha=0.3)
+
+    axes[0, 2].plot(ep, hist["I2T_R@1"], label="R@1", marker="o", ms=2)
+    axes[0, 2].plot(ep, hist["I2T_R@5"], label="R@5", marker="o", ms=2)
+    axes[0, 2].plot(ep, hist["I2T_R@10"], label="R@10", marker="o", ms=2)
+    axes[0, 2].set(title="I2T Retrieval", xlabel="Epoch", ylabel="%")
+    axes[0, 2].legend(); axes[0, 2].grid(alpha=0.3)
+
+    axes[1, 0].plot(ep, hist["cls_acc"], marker="o", ms=2, color="green")
+    axes[1, 0].set(title="Classification Accuracy", xlabel="Epoch", ylabel="%")
+    axes[1, 0].grid(alpha=0.3)
+
+    axes[1, 1].plot(ep, hist["sev_mae"], marker="o", ms=2, color="orange")
+    axes[1, 1].set(title="Severity MAE (%)", xlabel="Epoch")
+    axes[1, 1].grid(alpha=0.3)
+
+    axes[1, 2].plot(ep, hist["logit_scale"], color="red", marker="o", ms=2)
+    axes[1, 2].set(title="Logit Scale", xlabel="Epoch")
+    axes[1, 2].grid(alpha=0.3)
+
+    plt.suptitle(
+        f"MedSigLIP v13 — LoRA r={cfg.lora_r} | lam_cls={cfg.lam_cls} | bbox_weight={cfg.bbox_weight}",
+        fontsize=14,
+    )
+    plt.tight_layout()
+    plt.savefig(f"{cfg.save_dir}/training_curves.png", dpi=150)
+    plt.close()
+
+
 # ---------- main ----------
 
 def main():
     print(f"{'=' * 70}")
-    print("  MEDSIGLIP v14 — MIRAGE Image Encoder + MedSigLIP Text")
-    print(f"  MIRAGE: {cfg.mirage_model} ({cfg.mirage_dim}d) -> proj -> {cfg.text_dim}d")
+    print("  MEDSIGLIP v13 — LoRA + BBox Oversampling + lam_cls=1.0 + 27B prompts")
+    print(f"  split_json = {cfg.split_json}")
     print(f"  bs={cfg.bs} x accum={cfg.accum} = {cfg.bs * cfg.accum} effective")
     print(f"  lam_cls={cfg.lam_cls} | lam_sev={cfg.lam_sev} | bbox_weight={cfg.bbox_weight}")
+    print(f"  LoRA r={cfg.lora_r} alpha={cfg.lora_alpha} lr={cfg.lora_lr}")
     print(f"{'=' * 70}")
 
     set_seed()
 
     wandb.init(
         project="licenta-medsiglip",
-        name="v14-mirage-base",
+        name="v13-lora-cls1.0-bbox3x-27b",
         config={
-            "version": "v14",
-            "image_encoder": "MIRAGE-Base (frozen)",
-            "text_encoder": "MedSigLIP (frozen)",
-            "projection": f"{cfg.mirage_dim} -> {cfg.text_dim}",
+            "version": "v13",
+            "model": cfg.model_path,
             "bs_effective": cfg.bs * cfg.accum,
+            "epochs": cfg.epochs,
+            "prompts": "MedGemma 27B IT",
+            "lora_r": cfg.lora_r,
+            "lora_alpha": cfg.lora_alpha,
+            "lora_lr": cfg.lora_lr,
             "lam_cls": cfg.lam_cls,
+            "lam_sev": cfg.lam_sev,
             "bbox_weight": cfg.bbox_weight,
+            "splits": "splits_v3 (patient-grouped)",
+            "dataset": "OCT5k",
         }
     )
 
-    # MedSigLIP processor pt text tokenization
-    proc = AutoProcessor.from_pretrained(cfg.medsiglip_path)
+    proc = AutoProcessor.from_pretrained(cfg.model_path)
 
-    train_ds, train_dl = make_train_loader(proc)
-    _, val_dl = make_eval_loader(proc, "val")
-    _, test_dl = make_eval_loader(proc, "test")
+    # train loader cu bbox oversampling
+    train_ds, train_dl = make_train_loader_weighted(proc, cfg)
+
+    # val/test
+    _, val_dl, test_dl = make_loaders(proc, cfg)
+
+    if val_dl is None:
+        raise RuntimeError("Val loader missing!")
 
     nc = train_ds.n_classes
     print(f"  Val: {len(val_dl.dataset)} | Classes: {train_ds.classes}")
 
-    model = MIRAGEMultiTask(n_classes=nc).to(cfg.device)
+    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc).to(cfg.device)
     loss_fn = SigLIPLoss()
 
     print("\n  Optimizer:")
@@ -644,6 +581,7 @@ def main():
     hist_keys = [
         "train_loss", "val_loss",
         "train_loss_c", "train_loss_s", "train_loss_cl",
+        "val_loss_c", "val_loss_s", "val_loss_cl",
         "I2T_R@1", "I2T_R@5", "I2T_R@10",
         "T2I_R@1", "T2I_R@5", "T2I_R@10",
         "cls_acc", "sev_mae", "logit_scale", "lr",
@@ -651,8 +589,24 @@ def main():
     hist = {k: [] for k in hist_keys}
     best = 0.0
     wait = 0
+    start_ep = 0
 
-    for ep in range(cfg.epochs):
+    if cfg.resume and os.path.exists(cfg.resume):
+        ckpt = torch.load(cfg.resume, map_location=cfg.device, weights_only=False)
+        model.load_state_dict(ckpt["model"])
+        opt.load_state_dict(ckpt["opt"])
+        sched.load_state_dict(ckpt["sched"])
+        scaler.load_state_dict(ckpt["scaler"])
+        start_ep = ckpt["epoch"] + 1
+        best = ckpt["best_score"]
+        wait = ckpt["wait"]
+        hist = ckpt["hist"]
+        print(f"  Resumed from epoch {start_ep}, best: {best:.1f}")
+
+    # ================================================================
+    # antrenare cu bbox oversampling (o singura faza)
+    # ================================================================
+    for ep in range(start_ep, cfg.epochs):
         t = run_train(model, train_dl, loss_fn, opt, scaler, ep)
         clear_mem()
 
@@ -673,6 +627,9 @@ def main():
         hist["train_loss_c"].append(t["loss_c"])
         hist["train_loss_s"].append(t["loss_s"])
         hist["train_loss_cl"].append(t["loss_cl"])
+        hist["val_loss_c"].append(v["loss_c"])
+        hist["val_loss_s"].append(v["loss_s"])
+        hist["val_loss_cl"].append(v["loss_cl"])
         hist["cls_acc"].append(m["cls_acc"])
         hist["sev_mae"].append(m["sev_mae"])
         hist["logit_scale"].append(scale)
@@ -692,12 +649,18 @@ def main():
         wandb.log({
             "epoch": ep + 1,
             "train/loss": t["loss"],
+            "train/loss_contrastive": t["loss_c"],
+            "train/loss_severity": t["loss_s"],
+            "train/loss_classification": t["loss_cl"],
             "val/loss": v["loss"],
             "val/R@1": avg_r1,
+            "val/I2T_R@1": m["I2T_R@1"],
+            "val/T2I_R@1": m["T2I_R@1"],
             "val/cls_acc": m["cls_acc"],
             "val/sev_mae": m["sev_mae"],
             "val/score": score,
             "logit_scale": scale,
+            "lr": opt.param_groups[0]["lr"],
         })
 
         ckpt = {
@@ -706,7 +669,7 @@ def main():
             "scaler": scaler.state_dict(), "best_score": best,
             "wait": wait, "hist": hist,
             "num_classes": nc, "classes": train_ds.classes,
-            "version": "v14",
+            "version": "v13",
         }
 
         if score > best + cfg.min_delta:
@@ -724,23 +687,21 @@ def main():
             print(f"  Early stopping la epoch {ep + 1}")
             break
 
-    # test
-    if test_dl is not None:
-        ckpt = torch.load(f"{cfg.save_dir}/ckpts/best.pth", map_location=cfg.device, weights_only=False)
-        model.load_state_dict(ckpt["model"])
-        print("\n  TEST SET:")
-        test_m = eval_all(model, test_dl)
-        avg_r1 = (test_m["I2T_R@1"] + test_m["T2I_R@1"]) / 2
-        test_score = 0.5 * avg_r1 + 0.25 * test_m["cls_acc"] + 0.25 * max(0, 100 - test_m["sev_mae"])
-        print(f"    R@1={avg_r1:.1f}% | Cls={test_m['cls_acc']:.1f}% | "
-              f"SevMAE={test_m['sev_mae']:.1f}% | Score={test_score:.1f}")
+    # ================================================================
+    # FINAL
+    # ================================================================
+    os.makedirs("checkpoints", exist_ok=True)
+    torch.save(model.state_dict(), "checkpoints/medsiglip_v13_final.pth")
+
+    pd.DataFrame(hist).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
+    save_plots(hist)
 
     wandb.finish()
 
     print(f"\n{'=' * 70}")
     print(f"  DONE! Best Score: {best:.1f}")
-    print(f"  v14: MIRAGE-Base (frozen) + MedSigLIP text (frozen) + projection")
-    print(f"  Saved: {cfg.save_dir}/ckpts/best.pth")
+    print(f"  v13: LoRA + lam_cls=1.0 + bbox oversampling 3x + 27B prompts")
+    print(f"  Saved: checkpoints/medsiglip_v13_final.pth")
     print(f"{'=' * 70}")
 
 
