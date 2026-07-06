@@ -87,7 +87,7 @@ lambda_cls:
 lambda_sev:
     value: 0.3
 model:
-    value: models/medsiglip-448
+    value: model/medsiglip-448
 prompt_drop_prob:
     value: 0.1
 prompt_swap_prob:

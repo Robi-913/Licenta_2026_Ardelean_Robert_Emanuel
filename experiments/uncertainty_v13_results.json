@@ -6,7 +6,7 @@
   "mean_entropy": NaN,
   "mean_cls_std": 0.0143,
   "mean_sev_std": 4.0,
-  "ece": 0.3168,
+  "ece": 0.3183,
   "correct_confidence": 98.69,
   "incorrect_confidence": 93.06,
   "per_class": {
@@ -15,28 +15,28 @@
       "accuracy": 80.24,
       "mean_confidence": 97.44,
       "mean_entropy": NaN,
-      "mean_sev_std": 5.45
+      "mean_sev_std": 5.47
     },
     "DME": {
       "count": 191,
       "accuracy": 85.34,
       "mean_confidence": 98.31,
-      "mean_entropy": 0.0469,
-      "mean_sev_std": 3.64
+      "mean_entropy": 0.0466,
+      "mean_sev_std": 3.57
     },
     "DRUSEN": {
       "count": 8,
       "accuracy": 87.5,
       "mean_confidence": 100.0,
       "mean_entropy": 0.0003,
-      "mean_sev_std": 6.46
+      "mean_sev_std": 6.5
     },
     "NORMAL": {
       "count": 210,
       "accuracy": 85.71,
       "mean_confidence": 97.62,
-      "mean_entropy": 0.0661,
-      "mean_sev_std": 1.9
+      "mean_entropy": 0.0656,
+      "mean_sev_std": 1.91
     }
   }
 }

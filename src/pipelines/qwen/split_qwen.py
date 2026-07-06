@@ -1,4 +1,12 @@
-import gc
+"""
+[ARCHIVED / TESTED - NOT MOVING FORWARD]
+
+Acesta este un script vechi, pastrat ca dovada (proof of concept) ca s-a incercat
+impartirea prompturilor in Partea A si Partea B folosind un model local (Qwen2.5-7B).
+A fost inlocuit in pipeline-ul principal de varianta cu Gemini API (Step 3),
+deoarece API-ul este mult mai rapid si mai stabil pentru task-uri stricte de formatare a textului.
+"""
+
 import json
 import re
 from collections import Counter
@@ -8,16 +16,18 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
-from ...utils.seed import set_seed
+# Folosim calea absoluta pentru a evita problemele de import relativ
+from src.utils.seed import set_seed
 
-
-# ---------- config ----------
+# CONFIGURARI
 
 class Config:
-    model_path = "models/qwen2.5-7b-instruct"
+    # Setarile pentru modelul local folosit la teste
+    model_path = "model/qwen2.5-7b-instruct"
     src_json = "data/oct5k/medgemma_prompts.json"
     out_json = "data/oct5k/medgemma_prompts_split.json"
 
+    # Parametrii pentru generare si limitele de cuvinte
     max_tokens = 300
     limit_a = 50
     limit_b = 50
@@ -31,22 +41,26 @@ class Config:
 cfg = Config()
 
 
-# ---------- model ----------
+# INCARCARE MODEL
 
 def load_model():
     print(f"\n  Model: {cfg.model_path} (Text-Only Mode)")
+
+    # Incarcam procesorul si modelul in bfloat16 pentru a economisi memorie video
     proc = AutoProcessor.from_pretrained(cfg.model_path)
     mdl = AutoModelForImageTextToText.from_pretrained(
         cfg.model_path,
         dtype=torch.bfloat16,
         device_map="auto",
     )
-    mdl.eval()
+    mdl.eval()  # Setam modelul in modul de inferenta (nu se antreneaza)
+
     return mdl, proc
 
 
-# ---------- prompt construction ----------
+# CONSTRUCTIA PROMPT-ULUI (Instructiunile)
 
+# Regulile stricte pentru Qwen: fara culori, fara sfaturi medicale, format exact.
 SYS_PROMPT = (
     "You are a strict text editor. Rewrite the following medical text into EXACTLY two short sentences for a raw grayscale OCT.\n"
     "RULES:\n"
@@ -59,6 +73,7 @@ SYS_PROMPT = (
 
 
 def make_request(long_text):
+    # Imbina instructiunile de sistem cu textul primit pentru procesare
     return (
         f"{SYS_PROMPT}\n\n"
         f"Source Text:\n{long_text}\n\n"
@@ -69,12 +84,13 @@ def make_request(long_text):
     )
 
 
-# ---------- generation ----------
+# EXECUTIA MODELULUI
 
 @torch.no_grad()
 def call_model(mdl, proc, long_text, extra=""):
     full = make_request(long_text) + extra
 
+    # Construim structura de mesaje standard (chat template)
     msgs = [{"role": "user", "content": [{"type": "text", "text": full}]}]
 
     inputs = proc.apply_chat_template(
@@ -88,6 +104,7 @@ def call_model(mdl, proc, long_text, extra=""):
     prefix = inputs["input_ids"].shape[1]
     feed = {k: inputs[k].to(mdl.device) for k in ["input_ids", "attention_mask"] if k in inputs}
 
+    # Fortam modelul sa genereze un raspuns determinist (do_sample=False)
     out = mdl.generate(
         **feed,
         max_new_tokens=cfg.max_tokens,
@@ -99,9 +116,10 @@ def call_model(mdl, proc, long_text, extra=""):
     return proc.decode(out[0][prefix:], skip_special_tokens=True).strip()
 
 
-# ---------- parsing / validation ----------
+# VALIDARE SI PARSARE
 
 def clean(s):
+    # Curata spatiile duble si spatiile inainte de semnele de punctuatie
     s = " ".join((s or "").split())
     s = re.sub(r"\s+([,.;:])", r"\1", s)
     return s.strip()
@@ -110,6 +128,7 @@ def clean(s):
 def parse_response(response, fallback):
     pa, pb = "", ""
 
+    # Cautam randurile care incep cu PROMPT_A si PROMPT_B
     for line in response.split("\n"):
         line = line.strip()
         upper = line.upper()
@@ -118,6 +137,7 @@ def parse_response(response, fallback):
         elif upper.startswith("PROMPT_B:"):
             pb = line[len("PROMPT_B:"):].strip()
 
+    # Daca modelul a ratat formatul complet, aplicam o impartire mecanica (taiem textul la jumatate)
     if not pa or not pb:
         words = fallback.split()
         mid = max(1, len(words) // 2)
@@ -126,12 +146,14 @@ def parse_response(response, fallback):
         if not pb:
             pb = " ".join(words[mid:])
 
+    # Taiem textele daca depasesc limita maxima de cuvinte impusa
     pa = clean(" ".join(pa.split()[:cfg.limit_a]))
     pb = clean(" ".join(pb.split()[:cfg.limit_b]))
 
     return pa, pb
 
 
+# Liste cu cuvinte interzise pe care dorim sa le evitam in dataset
 BANNED_MED = ["treatment", "operation", "surgery", "prognosis", "intervention", "severity"]
 BANNED_VIS = [
     "mask", "segmentation", "color", "colored",
@@ -141,6 +163,7 @@ BANNED_VIS = [
 
 
 def check(pa, pb):
+    # Verifica daca prompturile respecta cu strictete toate conditiile
     problems = []
 
     if not pa:
@@ -157,6 +180,7 @@ def check(pa, pb):
     if any(w in pb.lower() for w in BANNED_MED):
         problems.append("b_has_medical_opinion")
 
+    # Analizam seturile de cuvinte pentru a gasi culori sau cuvinte legate de segmentare vizuala
     wa = set(re.findall(r"\b\w+\b", pa.lower()))
     wb = set(re.findall(r"\b\w+\b", pb.lower()))
 
@@ -172,6 +196,7 @@ def do_split(mdl, proc, long_text):
     best_a, best_b = "", ""
     best_problems = None
 
+    # Acordam modelului cateva incercari sa raspunda corect
     for attempt in range(cfg.retries + 1):
         hint = ""
         if attempt > 0:
@@ -184,13 +209,15 @@ def do_split(mdl, proc, long_text):
         best_a, best_b = pa, pb
         best_problems = problems
 
+        # Daca textul a trecut toate testele, iesim din bucla
         if ok:
             return pa, pb, True, []
 
+    # Daca a esuat de toate datile, returnam cel mai bun rezultat partial gasit
     return best_a, best_b, False, best_problems
 
 
-# ---------- batch processing ----------
+# PROCESARE IN MASA (BATCH)
 
 def save_out(data):
     out = Path(cfg.out_json)
@@ -201,6 +228,8 @@ def save_out(data):
 
 def run_all(mdl, proc, data):
     prev = {}
+
+    # Logica de resume
     if cfg.resume and Path(cfg.out_json).exists():
         with open(cfg.out_json, "r", encoding="utf-8") as f:
             old = json.load(f)
@@ -246,19 +275,27 @@ def run_all(mdl, proc, data):
     save_out(results)
     return results, n_err, n_skip
 
-
-# ---------- main ----------
+# EXECUTIE PRINCIPALA
 
 def main():
     set_seed()
 
+    print("=" * 70)
+    print("  [ARCHIVED] STEP 3: PROMPT SPLITTING WITH LOCAL QWEN")
+    print("=" * 70)
+
     with open(cfg.src_json, "r", encoding="utf-8") as f:
         raw = json.load(f)
 
+    # Procesam doar elementele care au generat corect un text in pasul precedent
     usable = [p for p in raw if not p["generated_prompt"].startswith("ERROR")]
 
     mdl, proc = load_model()
     results, n_err, n_skip = run_all(mdl, proc, usable)
+
+    print(f"\n  Finalizat: {len(results)} inregistrari salvate.")
+    print(f"  Erori: {n_err} | Sarite: {n_skip}")
+    print("=" * 70)
 
 
 if __name__ == "__main__":

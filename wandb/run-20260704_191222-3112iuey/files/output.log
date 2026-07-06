@@ -1,0 +1,67 @@
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49406. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49407. This may result in unexpected behavior.
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 imagini (1447 cu bbox, weight=3.0x)
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 13724.60it/s]
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1369: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:40.)
+  return t.to(
+Epoch 1/35: 100%|█████████████████████████████| 372/372 [1:21:26<00:00, 13.14s/it, C=1.008, CL=1.221, L=2.412, S=0.154]
+Epoch 2/35: 100%|█████████████████████████████| 372/372 [1:23:04<00:00, 13.40s/it, C=0.383, CL=0.933, L=1.058, S=0.053]
+
+Epoch 1: Loss T=2.412 V=1.263 [C=1.008 S=0.154 CL=1.221]
+  R@1=45.1% | Cls=35.9% | SevMAE=37.8% | Score=47.1
+  ★ New best: 47.1
+Epoch 3/35: 100%|█████████████████████████████| 372/372 [1:21:31<00:00, 13.15s/it, C=0.316, CL=0.435, L=0.772, S=0.041]
+
+Epoch 2: Loss T=1.058 V=1.079 [C=0.383 S=0.053 CL=0.933]
+  R@1=60.9% | Cls=60.8% | SevMAE=32.6% | Score=62.5
+  ★ New best: 62.5
+Epoch 4/35: 100%|█████████████████████████████| 372/372 [1:21:33<00:00, 13.15s/it, C=0.280, CL=0.154, L=0.612, S=0.031]
+
+Epoch 3: Loss T=0.772 V=1.246 [C=0.316 S=0.041 CL=0.435]
+  R@1=78.9% | Cls=70.6% | SevMAE=30.4% | Score=74.5
+  ★ New best: 74.5
+Epoch 5/35: 100%|█████████████████████████████| 372/372 [1:22:05<00:00, 13.24s/it, C=0.258, CL=0.085, L=0.546, S=0.027]
+
+Epoch 4: Loss T=0.612 V=1.223 [C=0.280 S=0.031 CL=0.154]
+  R@1=83.8% | Cls=77.1% | SevMAE=26.5% | Score=79.6
+  ★ New best: 79.6
+Epoch 6/35: 100%|█████████████████████████████| 372/372 [1:22:19<00:00, 13.28s/it, C=0.255, CL=0.059, L=0.532, S=0.024]
+
+Epoch 5: Loss T=0.546 V=1.449 [C=0.258 S=0.027 CL=0.085]
+  R@1=78.3% | Cls=73.8% | SevMAE=27.9% | Score=75.6
+  (1/10)
+Epoch 7/35: 100%|█████████████████████████████| 372/372 [1:21:18<00:00, 13.11s/it, C=0.246, CL=0.026, L=0.505, S=0.022]
+
+Epoch 6: Loss T=0.532 V=1.342 [C=0.255 S=0.024 CL=0.059]
+  R@1=76.9% | Cls=76.4% | SevMAE=26.9% | Score=75.8
+  (2/10)
+Epoch 8/35: 100%|█████████████████████████████| 372/372 [1:21:50<00:00, 13.20s/it, C=0.239, CL=0.024, L=0.489, S=0.021]
+
+Epoch 7: Loss T=0.505 V=1.242 [C=0.246 S=0.022 CL=0.026]
+  R@1=86.3% | Cls=77.4% | SevMAE=27.0% | Score=80.8
+  ★ New best: 80.8
+Epoch 9/35: 100%|█████████████████████████████| 372/372 [1:21:17<00:00, 13.11s/it, C=0.232, CL=0.011, L=0.470, S=0.019]
+
+Epoch 8: Loss T=0.489 V=1.315 [C=0.239 S=0.021 CL=0.024]
+  R@1=84.5% | Cls=75.8% | SevMAE=27.4% | Score=79.4
+  (1/10)
+Epoch 10/35: 100%|████████████████████████████| 372/372 [1:22:02<00:00, 13.23s/it, C=0.215, CL=0.014, L=0.439, S=0.019]
+
+Epoch 9: Loss T=0.470 V=1.481 [C=0.232 S=0.019 CL=0.011]
+  R@1=83.7% | Cls=76.5% | SevMAE=27.1% | Score=79.2
+  (2/10)
+Epoch 11/35: 100%|████████████████████████████| 372/372 [1:20:46<00:00, 13.03s/it, C=0.204, CL=0.007, L=0.414, S=0.018]
+
+Epoch 10: Loss T=0.439 V=1.384 [C=0.215 S=0.019 CL=0.014]
+  R@1=83.4% | Cls=76.4% | SevMAE=27.7% | Score=78.9
+  (3/10)
+Epoch 12/35:  80%|██████████████████▍    | 298/372 [2:18:00<27:21:14, 1330.74s/it, C=0.195, CL=0.006, L=0.395, S=0.016]
+
+Epoch 11: Loss T=0.414 V=1.441 [C=0.204 S=0.018 CL=0.007]
+  R@1=84.3% | Cls=76.6% | SevMAE=27.5% | Score=79.4
+  (4/10)

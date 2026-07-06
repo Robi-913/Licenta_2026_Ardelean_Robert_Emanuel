@@ -1,0 +1,91 @@
+_wandb:
+    value:
+        cli_version: 0.28.0
+        e:
+            6rbixts06xlzxfazg4p8jekqx7g3tdvi:
+                codePath: src\pipelines\medsiglip\train_medsiglip.py
+                codePathLocal: src\pipelines\medsiglip\train_medsiglip.py
+                cpu_count: 16
+                cpu_count_logical: 24
+                cudaVersion: "13.1"
+                disk:
+                    /:
+                        total: "709636386816"
+                        used: "628206362624"
+                email: ardelean.ni.robert@student.utcluj.ro
+                executable: C:\Users\admdev\miniconda3\envs\Robert\python.exe
+                git:
+                    commit: eecd64c8fc6006eb8c0c6c339d2e68f3e2fa73de
+                    remote: https://github.com/Robi-913/Licenta_2026_Ardelean_Robert_Emanuel.git
+                gpu: NVIDIA GeForce RTX 3090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10496
+                      memoryTotal: "25769803776"
+                      name: NVIDIA GeForce RTX 3090
+                      uuid: GPU-c444380a-4ad2-8b0b-cb7b-52567c36e56f
+                host: Sistem36-4
+                memory:
+                    total: "34088464384"
+                os: Windows-10-10.0.26200-SP0
+                program: D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py
+                python: CPython 3.10.20
+                root: D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel
+                startedAt: "2026-07-04T16:10:48.413481Z"
+                writerId: 6rbixts06xlzxfazg4p8jekqx7g3tdvi
+        m: []
+        python_version: 3.10.20
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+                - 98
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 71
+                - 98
+            "3":
+                - 13
+                - 16
+            "4": 3.10.20
+            "5": 0.28.0
+            "6": 5.12.1
+            "8":
+                - 3
+            "12": 0.28.0
+            "13": windows-amd64
+bbox_weight:
+    value: 3
+bs_effective:
+    value: 64
+dataset:
+    value: OCT5k
+epochs:
+    value: 35
+lam_cls:
+    value: 0.3
+lam_sev:
+    value: 0.2
+lora_alpha:
+    value: 32
+lora_lr:
+    value: 0.00015
+lora_r:
+    value: 16
+model:
+    value: models/medsiglip-448
+prompts:
+    value: MedGemma 27B IT
+version:
+    value: v13

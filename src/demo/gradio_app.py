@@ -1,350 +1,254 @@
 """
-Gradio Demo: MedSigLIP v7 OCT Analyzer
-EigenCAM + Cross-Attention Fusion + Dual Contrastive
+gradio_app.py — MedSigLIP v13 OCT Analyzer
 
 Rulare:
     python src/demo/gradio_app.py
     -> http://localhost:7860
+
+Pipeline:
+  - EigenCAM pe layers[-2] pt explainability
+  - CrossAttentionFusion pt retrieval contrastiv
+  - Clasificare boala + estimare severitate
 """
 
+import json
 import os
 import sys
-import json
-
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import cv2
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image, ImageFilter
-from transformers import AutoModel, AutoProcessor
-
 from pytorch_grad_cam import EigenCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
+from transformers import AutoProcessor
+
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+from src.models.medsiglip import MedSigLIPMultiTask
 
-# ---------- config ----------
 
-MDL_PATH   = "models/medsiglip-448"
-CKPT_PATH  = "experiments/medsiglip_v7/ckpts/best.pth"
+MDL_PATH   = "model/medsiglip-448"
+CKPT_PATH  = "experiments/medsiglip_v13/ckpts/final_with_probe.pth"
 SPLIT_JSON = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
 SEV_JSON   = "data/OCT5k/severity_scores_v2.json"
 
-DEV       = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
 CLS_NAMES = ["AMD", "DME", "DRUSEN", "NORMAL"]
 
-
-# ---------- cross-attention fusion ----------
-
-class CrossAttentionFusion(nn.Module):
-
-    def __init__(self, dim, heads=4, dropout=0.1):
-        super().__init__()
-        # v7 checkpoint are attn_a2b/attn_b2a — rename la load
-        self.attn_oct2mask = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.attn_mask2oct = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.norm = nn.LayerNorm(dim)
-        self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
-        self.proj = nn.Sequential(
-            nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim)
-        )
-
-    def forward(self, emb_a, emb_b):
-        a = emb_a.unsqueeze(1)
-        b = emb_b.unsqueeze(1)
-        attn_a, _ = self.attn_oct2mask(query=a, key=b, value=b)
-        attn_b, _ = self.attn_mask2oct(query=b, key=a, value=a)
-        attn_a = attn_a.squeeze(1)
-        attn_b = attn_b.squeeze(1)
-        g = self.gate(torch.cat([attn_a, attn_b], dim=-1))
-        fused = g * attn_a + (1 - g) * attn_b
-        fused = self.norm(fused + emb_a + emb_b)
-        fused = fused + self.proj(fused)
-        return F.normalize(fused, p=2, dim=-1)
+# Cuvinte cheie pt detectia bolii din promptul structural
+_DISEASE_KEYWORDS = {
+    "age-related":        "AMD",
+    "macular degeneration": "AMD",
+    "amd":                "AMD",
+    "diabetic":           "DME",
+    "dme":                "DME",
+    "drusen":             "DRUSEN",
+    "normal":             "NORMAL",
+}
 
 
-# ---------- model ----------
+# MODEL + CAM LOADING
 
-class MedSigLIPMultiTask(nn.Module):
+def _load_model() -> tuple[MedSigLIPMultiTask, list[str]]:
+    ckpt    = torch.load(CKPT_PATH, map_location="cpu", weights_only=False)
+    state   = ckpt.get("model", ckpt)
+    nc      = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
+    classes = ckpt.get("classes", CLS_NAMES) if isinstance(ckpt, dict) else CLS_NAMES
 
-    def __init__(self, model_path, n_classes=4):
-        super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
-
-        init_scale = torch.log(torch.tensor(1.0 / 0.07))
-        self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
-
-        dim = self.backbone.config.vision_config.hidden_size
-
-        self.sev_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, 1),
-        )
-        self.cls_head = nn.Sequential(
-            nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1),
-            nn.Linear(256, n_classes),
-        )
-        self.fusion = CrossAttentionFusion(dim, heads=4, dropout=0.1)
-
-    def encode_image(self, pixel_values):
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-    def encode_text(self, input_ids, attention_mask):
-        out = self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-    def forward(self, pixel_values):
-        """Forward pt EigenCAM — raw logits."""
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            emb = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            emb = out.last_hidden_state[:, 0]
-        else:
-            emb = out
-        return self.cls_head(emb)
+    model = MedSigLIPMultiTask(MDL_PATH, n_classes=nc)
+    model.load_state_dict(state, strict=False)
+    model = model.to(DEVICE).eval()
+    return model, classes
 
 
-# ---------- eigencam helpers ----------
+def _build_cam(model: MedSigLIPMultiTask) -> EigenCAM:
+    target_layers = [model.backbone.base_model.model.vision_model.encoder.layers[-2]]
+    return EigenCAM(model=model, target_layers=target_layers, reshape_transform=_reshape_transform)
 
-def reshape_transform(tensor, height=32, width=32):
-    """SigLIP NU are CLS token."""
+
+# CAM HELPERS
+
+def _reshape_transform(tensor: torch.Tensor) -> torch.Tensor:
+    """
+    pytorch-grad-cam asteapta [B, C, H, W] dar ViT produce [B, seq_len, dim].
+    SigLIP NU are CLS token — convertim direct la grila 2D.
+    """
     n_patches = tensor.shape[1]
     h = w = int(n_patches ** 0.5)
-    if n_patches == h * w + 1:
-        tensor = tensor[:, 1:, :]
+    if n_patches == h * w + 1:  # detectie automata CLS token daca exista
+        tensor    = tensor[:, 1:, :]
         n_patches = tensor.shape[1]
-        h = w = int(n_patches ** 0.5)
-    tensor = tensor[:, :h * w, :]
-    result = tensor.reshape(tensor.size(0), h, w, tensor.size(2))
-    result = result.permute(0, 3, 1, 2)
-    return result
+        h = w     = int(n_patches ** 0.5)
+    return tensor[:, :h * w, :].reshape(tensor.size(0), h, w, tensor.size(2)).permute(0, 3, 1, 2)
 
 
-def smooth_cam(grayscale_cam, kernel_size=31, threshold_pct=0.35):
+def _smooth_cam(grayscale_cam: np.ndarray, kernel_size: int = 31, threshold: float = 0.35) -> np.ndarray:
+    """Blur + threshold + renormalizare pt heatmap curat fara pixeli izolati."""
     smoothed = cv2.GaussianBlur(grayscale_cam, (kernel_size, kernel_size), 0)
     lo, hi = smoothed.min(), smoothed.max()
     if hi - lo > 1e-8:
         smoothed = (smoothed - lo) / (hi - lo)
-    smoothed[smoothed < threshold_pct] = 0
+    smoothed[smoothed < threshold] = 0.0
     hi = smoothed.max()
     if hi > 1e-8:
-        smoothed = smoothed / hi
+        smoothed /= hi
     return smoothed
 
 
-# ---------- auto crop ----------
+# PREPROCESSING
 
-def auto_crop(img, threshold=35):
-    arr = np.array(img.convert("L"))
+def _auto_crop(img: Image.Image, threshold: int = 35) -> Image.Image:
+    """Taie marginile negre din imaginile OCT prin detectia zonei retiniene."""
+    arr  = np.array(img.convert("L"))
     mask = arr > threshold
-    rows = mask.any(axis=1)
-    cols = mask.any(axis=0)
+    rows, cols = mask.any(axis=1), mask.any(axis=0)
     if rows.any() and cols.any():
-        y1 = int(rows.argmax())
-        y2 = int(len(rows) - rows[::-1].argmax())
-        x1 = int(cols.argmax())
-        x2 = int(len(cols) - cols[::-1].argmax())
-        pad = 5
-        y1 = max(0, y1 - pad)
-        x1 = max(0, x1 - pad)
-        y2 = min(arr.shape[0], y2 + pad)
-        x2 = min(arr.shape[1], x2 + pad)
+        y1 = max(0, int(rows.argmax()) - 5)
+        y2 = min(arr.shape[0], int(len(rows) - rows[::-1].argmax()) + 5)
+        x1 = max(0, int(cols.argmax()) - 5)
+        x2 = min(arr.shape[1], int(len(cols) - cols[::-1].argmax()) + 5)
         if (x2 - x1) > 50 and (y2 - y1) > 50:
-            img = img.crop((x1, y1, x2, y2))
+            return img.crop((x1, y1, x2, y2))
     return img
 
 
-# ---------- normalize path pt lookup ----------
+def _preprocess(image_array: np.ndarray) -> Image.Image:
+    pil = Image.fromarray(image_array).convert("RGB")
+    pil = pil.filter(ImageFilter.GaussianBlur(radius=0.5))
+    pil = _auto_crop(pil)
+    return pil
 
-def norm_path(p):
-    """Normalizeaza path la backslash consistent pt lookup."""
-    return p.replace("/", "\\")
 
+# RETRIEVAL DATABASE
 
-# ---------- load model ----------
-
-print("Loading model...")
-proc = AutoProcessor.from_pretrained(MDL_PATH)
-
-ckpt    = torch.load(CKPT_PATH, map_location="cpu", weights_only=False)
-nc      = ckpt.get("num_classes", 4)
-classes = ckpt.get("classes", CLS_NAMES)
-
-model = MedSigLIPMultiTask(MDL_PATH, n_classes=nc)
-
-# rename keys: attn_a2b -> attn_oct2mask (v7 checkpoint compat)
-state_dict = {}
-for k, v in ckpt["model"].items():
-    if "fusion.attn_a2b" in k:
-        k = k.replace("fusion.attn_a2b", "fusion.attn_oct2mask")
-    elif "fusion.attn_b2a" in k:
-        k = k.replace("fusion.attn_b2a", "fusion.attn_mask2oct")
-    state_dict[k] = v
-model.load_state_dict(state_dict)
-model = model.to(DEV)
-model.eval()
-
-# EigenCAM
-target_layers = [model.backbone.vision_model.encoder.layers[-2]]
-cam_gen = EigenCAM(
-    model=model,
-    target_layers=target_layers,
-    reshape_transform=reshape_transform,
-)
-
-# ---------- load retrieval DB ----------
-
-print("Loading retrieval database...")
-
-# v2 format: dict cu image_path ca key, campuri "a" si "b"
-with open(SPLIT_JSON, "r", encoding="utf-8") as f:
-    split_raw = json.load(f)
-
-# severity — keyed by image_path (normalizeaza paths)
-with open(SEV_JSON, "r", encoding="utf-8") as f:
-    sev_list = json.load(f)
-
-sev_lookup = {}
-for x in sev_list:
-    if x.get("severity_valid"):
-        sev_lookup[norm_path(x["image_path"])] = x
-
-print("Precomputing text embeddings (cross-attention fusion)...")
-ret_db = []
-
-# detecteaza disease category din prompt (incepe cu numele bolii)
-DISEASE_MAP = {
-    "age-related": "AMD",
-    "diabetic":    "DME",
-    "drusen":      "DRUSEN",
-    "normal":      "NORMAL",
-}
-
-def detect_disease(prompt_a):
+def _detect_disease(prompt_a: str) -> str:
+    """Detecteaza clasa de boala din primul prompt (structural) prin keyword matching."""
     p = prompt_a.lower()
-    for kw, cls in DISEASE_MAP.items():
-        if p.startswith(kw):
+    for kw, cls in _DISEASE_KEYWORDS.items():
+        if kw in p:
             return cls
-    # fallback: cauta in text
-    if "macular degeneration" in p or "amd" in p:
-        return "AMD"
-    if "diabetic" in p or "dme" in p:
-        return "DME"
-    if "drusen" in p:
-        return "DRUSEN"
-    if "normal" in p:
-        return "NORMAL"
     return "UNKNOWN"
 
-for img_path, item in split_raw.items():
-    pa = item.get("a", "")
-    pb = item.get("b", "")
-    if not pa or not pb:
-        continue
 
-    ta = proc.tokenizer(pa, padding="max_length", truncation=True, max_length=64, return_tensors="pt")
-    tb = proc.tokenizer(pb, padding="max_length", truncation=True, max_length=64, return_tensors="pt")
+def _build_retrieval_db(
+    model: MedSigLIPMultiTask,
+    processor: AutoProcessor,
+    split_json: str,
+    sev_json: str,
+) -> tuple[list[dict], torch.Tensor]:
+    """
+    Pre-computa embedding-urile fuzionate pt toate cazurile din baza de date.
+    Returneaza (lista de metadate, matrice de embeddings [N, dim]).
+    """
+    with open(split_json, "r", encoding="utf-8") as f:
+        split_raw = json.load(f)
+    with open(sev_json, "r", encoding="utf-8") as f:
+        sev_lookup = {
+            x["image_path"].replace("/", "\\"): x
+            for x in json.load(f)
+            if x.get("severity_valid")
+        }
 
-    with torch.no_grad():
-        ma = ta.get("attention_mask", torch.ones_like(ta["input_ids"]))
-        mb = tb.get("attention_mask", torch.ones_like(tb["input_ids"]))
-        ea = model.encode_text(ta["input_ids"].to(DEV), ma.to(DEV))
-        eb = model.encode_text(tb["input_ids"].to(DEV), mb.to(DEV))
-        merged = model.fusion(ea, eb)
+    db = []
+    for img_path, item in split_raw.items():
+        pa, pb = item.get("a", ""), item.get("b", "")
+        if not pa or not pb:
+            continue
 
-    path_norm = norm_path(img_path)
-    sev_info  = sev_lookup.get(path_norm, {})
-    disease   = detect_disease(pa)
+        def _tok(text):
+            enc  = processor.tokenizer(text, padding="max_length", truncation=True, max_length=64, return_tensors="pt")
+            ids  = enc["input_ids"].to(DEVICE)
+            mask = enc.get("attention_mask", torch.ones_like(ids)).to(DEVICE)
+            return ids, mask
 
-    ret_db.append({
-        "emb":      merged.cpu(),
-        "prompt_a": pa,
-        "prompt_b": pb,
-        "disease":  disease,
-        "path":     img_path,
-        "sev":      sev_info.get("severity_percent"),
-        "sev_level": sev_info.get("severity_level"),
-    })
+        with torch.no_grad():
+            ea     = model.encode_text(*_tok(pa))
+            eb     = model.encode_text(*_tok(pb))
+            fused  = model.fusion(ea, eb)
 
-all_txt_emb = torch.cat([r["emb"] for r in ret_db])
-print(f"Retrieval DB: {len(ret_db)} entries")
-print("Ready!\n")
+        path_norm = img_path.replace("/", "\\")
+        sev_info  = sev_lookup.get(path_norm, {})
+
+        db.append({
+            "emb":      fused.cpu(),
+            "prompt_a": pa,
+            "prompt_b": pb,
+            "disease":  _detect_disease(pa),
+            "path":     img_path,
+            "sev":      sev_info.get("severity_percent"),
+        })
+
+    all_embs = torch.cat([r["emb"] for r in db])
+    return db, all_embs
 
 
-# ---------- inference ----------
+# INITIALIZARE GLOBALA (o singura data la pornire)
 
-def get_sev_level(pct):
-    if pct < 15:
-        return "Minimal"
-    if pct < 30:
-        return "Mild"
-    if pct < 50:
-        return "Moderate"
-    if pct < 70:
-        return "Significant"
-    if pct < 85:
-        return "Severe"
+print("  Loading model...")
+_processor      = AutoProcessor.from_pretrained(MDL_PATH)
+_model, _classes = _load_model()
+_cam             = _build_cam(_model)
+
+print("  Building retrieval database...")
+_ret_db, _all_txt_embs = _build_retrieval_db(_model, _processor, SPLIT_JSON, SEV_JSON)
+print(f"  Retrieval DB: {len(_ret_db)} entries | Ready!")
+
+
+# SEVERITY LABEL
+
+def _severity_label(pct: float) -> str:
+    if pct < 15: return "Minimal"
+    if pct < 30: return "Mild"
+    if pct < 50: return "Moderate"
+    if pct < 70: return "Significant"
+    if pct < 85: return "Severe"
     return "Critical"
 
 
-def analyze(image):
+# ANALIZA IMAGINE
+
+def analyze(image: np.ndarray) -> tuple[np.ndarray | None, str]:
     if image is None:
         return None, "Upload an OCT image to analyze."
 
-    pil = Image.fromarray(image).convert("RGB")
-    pil = pil.filter(ImageFilter.GaussianBlur(radius=0.5))
-    pil = auto_crop(pil)
-
-    inputs = proc(images=pil, return_tensors="pt")
-    pv = inputs["pixel_values"].to(DEV)
+    pil = _preprocess(image)
+    pv  = _processor(images=pil, return_tensors="pt")["pixel_values"].to(DEVICE)
 
     with torch.no_grad():
-        ie      = model.encode_image(pv)
-        logits  = model.cls_head(ie)
-        sev_pct = model.sev_head(ie).clamp(0, 1).item() * 100
+        # features brute pt head-uri (ne-normalizate)
+        image_pooled = _model.encode_image(pv)
+        cls_logits   = _model.classification_head(image_pooled)
+        sev_pct      = _model.severity_head(image_pooled).clamp(0, 1).item() * 100
 
-    probs    = torch.softmax(logits, dim=1)[0]
-    pred_i   = probs.argmax().item()
-    pred_cls = classes[pred_i]
-    conf     = probs[pred_i].item() * 100
-    per_cls  = {classes[i]: float(probs[i]) for i in range(len(classes))}
+        # embedding normalizat pt retrieval
+        img_emb_norm = F.normalize(image_pooled, p=2, dim=-1)
 
-    # EigenCAM
-    rgb_resized = cv2.resize(np.array(pil), (448, 448))
-    rgb_float   = np.float32(rgb_resized) / 255.0
+    probs    = torch.softmax(cls_logits, dim=1)[0]
+    pred_cls = _classes[probs.argmax().item()]
+    conf     = probs.max().item() * 100
+    per_cls  = {_classes[i]: float(probs[i]) for i in range(len(_classes))}
 
-    grayscale_cam = cam_gen(input_tensor=pv, targets=None)[0, :]
-    grayscale_cam = smooth_cam(grayscale_cam)
+    # EigenCAM — heatmap pe zona retiniana
+    rgb_resized   = cv2.resize(np.array(pil), (448, 448))
+    rgb_float     = np.float32(rgb_resized) / 255.0
+    grayscale_cam = _cam(input_tensor=pv, targets=None)[0]
+    grayscale_cam = _smooth_cam(grayscale_cam)
+    retina_mask   = cv2.GaussianBlur((cv2.cvtColor(rgb_resized, cv2.COLOR_RGB2GRAY) > 35).astype(np.float32), (15, 15), 0)
+    grayscale_cam *= retina_mask
+    overlay       = show_cam_on_image(rgb_float, grayscale_cam, use_rgb=True)
 
-    gray_img    = cv2.cvtColor(rgb_resized, cv2.COLOR_RGB2GRAY)
-    retina_mask = (gray_img > 35).astype(np.float32)
-    retina_mask = cv2.GaussianBlur(retina_mask, (15, 15), 0)
-    grayscale_cam = grayscale_cam * retina_mask
-
-    overlay = show_cam_on_image(rgb_float, grayscale_cam, use_rgb=True)
-
-    # retrieval top 3
+    # Retrieval top 3 cazuri similare
     with torch.no_grad():
-        sim = (ie.cpu() @ all_txt_emb.T).squeeze(0)
+        sim = (img_emb_norm.cpu() @ _all_txt_embs.T).squeeze(0)
     top = sim.topk(3)
 
     matches = ""
     for rank, (score, idx) in enumerate(zip(top.values, top.indices)):
-        r = ret_db[idx.item()]
+        r = _ret_db[idx.item()]
         matches += f"\n{'─' * 50}\n"
         matches += f"Match #{rank + 1} (similarity: {score.item():.3f})\n"
         matches += f"Disease: {r['disease']}"
@@ -353,55 +257,48 @@ def analyze(image):
         matches += f"\n\nStructure:\n{r['prompt_a']}\n"
         matches += f"\nLesions:\n{r['prompt_b']}\n"
 
-    level   = get_sev_level(sev_pct)
     bar_sev = int(sev_pct / 2)
-
-    report = f"""
+    report  = f"""
 DIAGNOSIS: {pred_cls}
 Confidence: {conf:.1f}%
 
-SEVERITY: {sev_pct:.1f}% ({level})
+SEVERITY: {sev_pct:.1f}% ({_severity_label(sev_pct)})
 {'█' * bar_sev}{'░' * (50 - bar_sev)}
 
 CONFIDENCE PER CLASS:
-  AMD:    {'█' * int(per_cls.get('AMD', 0) * 50)} {per_cls.get('AMD', 0) * 100:.1f}%
-  DME:    {'█' * int(per_cls.get('DME', 0) * 50)} {per_cls.get('DME', 0) * 100:.1f}%
+  AMD:    {'█' * int(per_cls.get('AMD',    0) * 50)} {per_cls.get('AMD',    0) * 100:.1f}%
+  DME:    {'█' * int(per_cls.get('DME',    0) * 50)} {per_cls.get('DME',    0) * 100:.1f}%
   DRUSEN: {'█' * int(per_cls.get('DRUSEN', 0) * 50)} {per_cls.get('DRUSEN', 0) * 100:.1f}%
   NORMAL: {'█' * int(per_cls.get('NORMAL', 0) * 50)} {per_cls.get('NORMAL', 0) * 100:.1f}%
 
 SIMILAR CASES FROM DATABASE:
 {matches}
 """
-
     return overlay, report
 
 
-# ---------- gradio app ----------
+# GRADIO UI
 
 def main():
     import gradio as gr
 
-    with gr.Blocks(
-        title="MedSigLIP v7 OCT Analyzer",
-        theme=gr.themes.Soft(),
-    ) as app:
-
+    with gr.Blocks(title="MedSigLIP v13 OCT Analyzer", theme=gr.themes.Soft()) as app:
         gr.Markdown("""
-        # MedSigLIP v7 — Retinal OCT Analyzer
-        ### MedGemma 27B Prompts + Cross-Attention Fusion + Dual Contrastive + Severity Estimation
+        # MedSigLIP v13 — Retinal OCT Analyzer
+        ### MedGemma 27B Prompts + Cross-Attention Fusion + Multi-Task Learning
 
         Upload a retinal OCT scan to get:
-        - **Disease Classification** (AMD, DME, DRUSEN, NORMAL)
+        - **Disease Classification** (AMD / DME / DRUSEN / NORMAL)
         - **Severity Estimation** (0-100%)
         - **EigenCAM Heatmap** (where the model looks)
-        - **Similar Cases** from the database with detailed descriptions
+        - **Similar Cases** from the database with clinical descriptions
         """)
 
         with gr.Row():
             with gr.Column(scale=1):
                 inp_img = gr.Image(label="Upload OCT Scan", type="numpy")
                 btn     = gr.Button("Analyze", variant="primary", size="lg")
-                gr.Markdown("Upload any retinal OCT B-scan image (grayscale or RGB)")
+                gr.Markdown("Upload any retinal OCT B-scan image (grayscale or RGB).")
 
             with gr.Column(scale=1):
                 out_img = gr.Image(label="EigenCAM Attention Map", type="numpy")
@@ -415,7 +312,7 @@ def main():
         ---
         **Thesis Project** — Retinal OCT Disease Classification using MedSigLIP Multi-Task Learning
 
-        *Pipeline: MedGemma 27B IT → Gemini Flash-Lite (split) → MedSigLIP v7 (cross-attention + dual contrastive)*
+        *Pipeline: MedGemma 27B IT → Gemini Flash-Lite (split) → MedSigLIP v13 (cross-attention + dual contrastive)*
 
         Explainability: EigenCAM (layers[-2], blur=31, threshold=35%)
 

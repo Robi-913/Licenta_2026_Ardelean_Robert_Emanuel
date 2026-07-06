@@ -1,0 +1,21 @@
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49406. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49407. This may result in unexpected behavior.
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 imagini (1447 cu bbox, weight=3.0x)
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 544, in main
+    _, val_loader, _ = make_loaders(processor, cfg)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\datasets\oct5k_medsiglip.py", line 242, in make_loaders
+    batch_size=cfg.bs,  # Ex: 32 imagini per grup
+AttributeError: 'Config' object has no attribute 'bs'
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 544, in main
+    _, val_loader, _ = make_loaders(processor, cfg)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\datasets\oct5k_medsiglip.py", line 242, in make_loaders
+    batch_size=cfg.bs,  # Ex: 32 imagini per grup
+AttributeError: 'Config' object has no attribute 'bs'

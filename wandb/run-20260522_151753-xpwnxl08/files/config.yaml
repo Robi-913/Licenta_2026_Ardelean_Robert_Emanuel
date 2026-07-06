@@ -73,7 +73,7 @@ dataset:
 epochs:
     value: 30
 model:
-    value: models/medsiglip-448
+    value: model/medsiglip-448
 sev_activation:
     value: clamp(0,1)
 sev_loss:

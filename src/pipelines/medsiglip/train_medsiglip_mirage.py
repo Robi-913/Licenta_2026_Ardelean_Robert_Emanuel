@@ -22,7 +22,7 @@ from peft import LoraConfig, get_peft_model
 import torchvision.transforms as T
 
 # MIRAGE
-sys.path.insert(0, os.path.abspath("models/mirage"))
+sys.path.insert(0, os.path.abspath("model/mirage"))
 from huggingface_hub import PyTorchModelHubMixin
 from mirage_hf import MIRAGEWrapper
 
@@ -49,13 +49,13 @@ class MIRAGEhf(MIRAGEWrapper, PyTorchModelHubMixin):
 
 class Config:
     # MIRAGE image encoder
-    mirage_model = "models/mirage/MIRAGE-Large"
+    mirage_model = "model/mirage/MIRAGE-Large"
     mirage_size = "large"
     mirage_dim = 1024
     mirage_input_size = 512
 
     # MedSigLIP text encoder (inghetat, doar pt text)
-    medsiglip_path = "models/medsiglip-448"
+    medsiglip_path = "model/medsiglip-448"
     text_dim = 1152
 
     splits_dir = "data/oct5k/splits_v3"
@@ -261,7 +261,7 @@ class MIRAGEMultiTask(nn.Module):
         init_scale = torch.log(torch.tensor(1.0 / 0.07))
         self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
 
-        # heads pe MIRAGE features (nu pe projected — mai directe)
+        # heads pe MIRAGE features (nu pe projected - mai directe)
         self.sev_head = nn.Sequential(
             nn.LayerNorm(cfg.mirage_dim),
             nn.Linear(cfg.mirage_dim, 256),
@@ -598,7 +598,7 @@ def run_val(model, loader, c_loss):
 
 def main():
     print(f"{'=' * 70}")
-    print("  MEDSIGLIP v14 — MIRAGE Image Encoder + MedSigLIP Text")
+    print("  MEDSIGLIP v14 - MIRAGE Image Encoder + MedSigLIP Text")
     print(f"  MIRAGE: {cfg.mirage_model} ({cfg.mirage_dim}d) -> proj -> {cfg.text_dim}d")
     print(f"  bs={cfg.bs} x accum={cfg.accum} = {cfg.bs * cfg.accum} effective")
     print(f"  lam_cls={cfg.lam_cls} | lam_sev={cfg.lam_sev} | bbox_weight={cfg.bbox_weight}")

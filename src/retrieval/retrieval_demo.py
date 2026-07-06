@@ -1,6 +1,6 @@
 
 """
-Retrieval Demo — MedSigLIP v5/v13 (Updated with LoRA & Probe)
+Retrieval Demo - MedSigLIP v5/v13 (Updated with LoRA & Probe)
 
 Genereaza vizualizari de retrieval:
   1. I2T Grid: imagine query -> top 3 texte gasite
@@ -36,6 +36,7 @@ from peft import LoraConfig, get_peft_model  # Adaugat pentru LoRA
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.utils.seed import set_seed
+from src.model.medsiglip import MedSigLIPMultiTask
 from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 
@@ -43,7 +44,7 @@ from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 class Config:
     model_path = "models/medsiglip-448"
-    checkpoint = "experiments/medsiglip_v13/ckpts/final_with_probe.pth" # Actualizeaza cu noul tau checkpoint
+    checkpoint = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
 
     test_csv = "data/oct5k/splits/test.csv"
     split_json = "data/oct5k/medgemma_prompts_split.json"
@@ -64,100 +65,13 @@ class Config:
 cfg = Config()
 os.makedirs(cfg.output_dir, exist_ok=True)
 
-
-# ---------- cross-attention fusion ----------
-
-class CrossAttentionFusion(nn.Module):
-
-    def __init__(self, dim, heads=4, dropout=0.1):
-        super().__init__()
-        self.attn_a2b = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.attn_b2a = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.norm = nn.LayerNorm(dim)
-        self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
-        self.proj = nn.Sequential(
-            nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim)
-        )
-
-    def forward(self, emb_a, emb_b):
-        a = emb_a.unsqueeze(1)
-        b = emb_b.unsqueeze(1)
-        attn_a, _ = self.attn_a2b(query=a, key=b, value=b)
-        attn_b, _ = self.attn_b2a(query=b, key=a, value=a)
-        attn_a = attn_a.squeeze(1)
-        attn_b = attn_b.squeeze(1)
-        g = self.gate(torch.cat([attn_a, attn_b], dim=-1))
-        fused = g * attn_a + (1 - g) * attn_b
-        fused = self.norm(fused + emb_a + emb_b)
-        fused = fused + self.proj(fused)
-        return F.normalize(fused, p=2, dim=-1)
-
-
 # ---------- helper pentru detecția probe-ului ----------
 
 def _detect_cls_head(state_dict):
     for k, v in state_dict.items():
-        if k == "cls_head.1.weight" or k == "cls_head.1.bias":
+        if k in ["cls_head.1.weight", "classification_head.1.weight"]:
             return v.shape[0] if len(v.shape) > 1 else v.shape[0]
     return 256
-
-
-# ---------- model ----------
-
-class MedSigLIPMultiTask(nn.Module):
-
-    def __init__(self, model_path, n_classes=4, cls_hidden=256):
-        super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
-        
-        # Aplicam LoRA
-        self.backbone = get_peft_model(self.backbone, LoraConfig(
-            r=16, lora_alpha=32, lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
-            bias="none",
-        ))
-
-        init_scale = torch.log(torch.tensor(1.0 / 0.07))
-        self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
-        
-        # Prelua dim-ul corect cand folosim LoRA (base_model.model)
-        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
-        dim = bb.config.vision_config.hidden_size
-
-        self.sev_head = nn.Sequential(
-            nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
-        )
-        
-        if cls_hidden == 512:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim),
-                nn.Linear(dim, 512), nn.GELU(), nn.Dropout(0.3),
-                nn.Linear(512, 256), nn.GELU(), nn.Dropout(0.15),
-                nn.Linear(256, n_classes),
-            )
-        else:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
-            )
-            
-        self.fusion = CrossAttentionFusion(dim, heads=4, dropout=0.1)
-
-    def encode_image(self, pixel_values):
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-    def encode_text(self, input_ids, attention_mask):
-        out = self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
 
 def free_mem():
     if torch.cuda.is_available():
@@ -195,8 +109,8 @@ def extract_all(model, loader):
     free_mem()
 
     return {
-        "img_emb": torch.cat(all_img),
-        "txt_emb": torch.cat(all_txt),
+        "img_emb": torch.cat(all_img).float(),
+        "txt_emb": torch.cat(all_txt).float(),
         "labels": torch.cat(all_lbl),
         "severity": torch.cat(all_sev),
     }
@@ -504,17 +418,26 @@ def main():
     # Incarcare checkpoint adaptabila la formatul nou
     ckpt = torch.load(cfg.checkpoint, map_location="cpu", weights_only=False)
     state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
-    
+
+    # --- REMAPPING CHEI VECHI -> NOI ---
+    remapped = {
+        k.replace("sev_head.", "severity_head.")
+        .replace("cls_head.", "classification_head.")
+        .replace("fusion.attn_a2b.", "fusion.attn_a_to_b.")
+        .replace("fusion.attn_b2a.", "fusion.attn_b_to_a."): v
+        for k, v in state_dict.items()
+    }
+
     nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
     classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
 
-    # Detecteaza formatul probe-ului
-    cls_hidden = _detect_cls_head(state_dict)
+    # Detecteaza formatul probe-ului folosind dictionarul remapat
+    cls_hidden = _detect_cls_head(remapped)
     print(f"  Detected cls_head hidden_dim: {cls_hidden}")
 
     # Initializeaza noul model cu LoRA si Probe
     model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc, cls_hidden=cls_hidden)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(remapped, strict=False)  # <-- Folosește remapped și strict=False
     model = model.to(cfg.device)
     model.eval()
     print(f"  Model on {cfg.device}")

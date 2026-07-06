@@ -1,0 +1,12 @@
+{"time":"2026-07-04T18:49:15.8256658+03:00","level":"INFO","msg":"wandb-core"}
+{"time":"2026-07-04T18:49:15.8256658+03:00","level":"INFO","msg":"stream: starting","core version":"0.28.0"}
+{"time":"2026-07-04T18:49:16.2009776+03:00","level":"INFO","msg":"stream: created new stream","id":"rymvf919"}
+{"time":"2026-07-04T18:49:16.2015096+03:00","level":"INFO","msg":"handler: started"}
+{"time":"2026-07-04T18:49:16.2036484+03:00","level":"INFO","msg":"stream: started"}
+{"time":"2026-07-04T18:49:16.2036484+03:00","level":"INFO","msg":"writer: started","stream_id":"rymvf919"}
+{"time":"2026-07-04T18:49:16.2041737+03:00","level":"INFO","msg":"sender: started"}
+{"time":"2026-07-04T18:49:17.3680126+03:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2026-07-04T18:49:17.3680126+03:00","level":"INFO","msg":"stream: finishing up"}
+{"time":"2026-07-04T18:49:17.3680126+03:00","level":"INFO","msg":"handler: closed"}
+{"time":"2026-07-04T18:49:17.3680126+03:00","level":"INFO","msg":"sender: closed"}
+{"time":"2026-07-04T18:49:17.3680126+03:00","level":"INFO","msg":"stream: all finished"}

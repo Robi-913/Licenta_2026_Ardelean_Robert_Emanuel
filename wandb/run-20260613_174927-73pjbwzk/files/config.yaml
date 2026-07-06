@@ -71,7 +71,7 @@ dataset:
 epochs:
     value: 30
 model:
-    value: models/medsiglip-448
+    value: model/medsiglip-448
 prompts:
     value: MedGemma 27B IT (vs 4B in v6)
 sev_activation:

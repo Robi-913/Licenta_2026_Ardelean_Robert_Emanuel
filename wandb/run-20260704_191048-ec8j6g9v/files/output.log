@@ -1,0 +1,128 @@
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49406. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49407. This may result in unexpected behavior.
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 imagini (1447 cu bbox, weight=3.0x)
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 13311.35it/s]
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1369: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:40.)
+  return t.to(
+Epoch 1/35:   0%|                                                                              | 0/186 [00:04<?, ?it/s]
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 574, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 256, in run_train
+    loss, loss_c, loss_s, loss_cl, img_emb, fused_emb, _, _ = compute_loss(
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 212, in compute_loss
+    img_emb, emb_a, emb_b, fused_emb, logit_scale, sev_pred, cls_logits = model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 269, in forward
+    image_pooled = self.encode_image(pixel_values) # [B, dim]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 166, in encode_image
+    return self._pool_features(self.backbone.get_image_features(pixel_values=pixel_values))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 907, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 734, in get_image_features
+    return self.vision_model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 1036, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\output_capturing.py", line 252, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 610, in forward
+    encoder_outputs: BaseModelOutput = self.encoder(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 461, in forward
+    hidden_states = encoder_layer(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\modeling_layers.py", line 93, in __call__
+    return super().__call__(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 355, in forward
+    hidden_states = self.mlp(hidden_states)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 322, in forward
+    hidden_states = self.activation_fn(hidden_states)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\activations.py", line 51, in forward
+    return self.act(input)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 136.00 MiB. GPU 0 has a total capacity of 24.00 GiB of which 0 bytes is free. Of the allocated memory 37.32 GiB is allocated by PyTorch, and 824.06 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 574, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 256, in run_train
+    loss, loss_c, loss_s, loss_cl, img_emb, fused_emb, _, _ = compute_loss(
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 212, in compute_loss
+    img_emb, emb_a, emb_b, fused_emb, logit_scale, sev_pred, cls_logits = model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 269, in forward
+    image_pooled = self.encode_image(pixel_values) # [B, dim]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 166, in encode_image
+    return self._pool_features(self.backbone.get_image_features(pixel_values=pixel_values))
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 907, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 734, in get_image_features
+    return self.vision_model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 1036, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\output_capturing.py", line 252, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 610, in forward
+    encoder_outputs: BaseModelOutput = self.encoder(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 461, in forward
+    hidden_states = encoder_layer(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\modeling_layers.py", line 93, in __call__
+    return super().__call__(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 355, in forward
+    hidden_states = self.mlp(hidden_states)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 322, in forward
+    hidden_states = self.activation_fn(hidden_states)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\activations.py", line 51, in forward
+    return self.act(input)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 136.00 MiB. GPU 0 has a total capacity of 24.00 GiB of which 0 bytes is free. Of the allocated memory 37.32 GiB is allocated by PyTorch, and 824.06 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

@@ -127,7 +127,7 @@ Ep 18: Loss T=0.042 V=0.506 [C=0.040 S=0.005 CL=0.002]
 ======================================================================
   FAZA 2: BBox Fine-Tuning GARANTAT (3 epoci)
   398 imagini cu adnotari reale de la specialisti
-  Modelul e incalzit din faza 1 — nu se re-initializeaza
+  Modelul e incalzit din faza 1 - nu se re-initializeaza
 ======================================================================
 Ep 20/30 [bbox-ft]: 100%|████████████████| 49/49 [03:23<00:00,  4.15s/it, C=0.086, CL=0.016, L=0.095, S=0.015, i2t=98%]
 

@@ -80,7 +80,7 @@ lora_lr:
 lora_r:
     value: 16
 model:
-    value: models/medsiglip-448
+    value: model/medsiglip-448
 prompts:
     value: MedGemma 27B IT
 sev_activation:

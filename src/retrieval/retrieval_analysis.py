@@ -1,5 +1,5 @@
 """
-Retrieval Analysis Detaliata — MedSigLIP v13
+Retrieval Analysis Detaliata - MedSigLIP v13
 
 Pe test set:
   1. R@1, R@2, R@3 per boala
@@ -34,16 +34,17 @@ from peft import LoraConfig, get_peft_model
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
+from src.model.medsiglip import MedSigLIPMultiTask
 from src.utils.seed import set_seed
 
 
-# ================================================================
+
 # CONFIG
-# ================================================================
+
 
 class Config:
     model_path  = "models/medsiglip-448"
-    ckpt_path   = "experiments/medsiglip_v13/ckpts/final_with_probe.pth"
+    ckpt_path   = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
 
     splits_dir  = "data/oct5k/splits_v3"
     split_json  = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
@@ -61,93 +62,19 @@ class Config:
 cfg = Config()
 os.makedirs(cfg.fig_dir, exist_ok=True)
 
-
-# ================================================================
-# MODEL
-# ================================================================
-
-class CrossAttentionFusion(nn.Module):
-    def __init__(self, dim, heads=4, dropout=0.1):
-        super().__init__()
-        self.attn_a2b = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.attn_b2a = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.norm = nn.LayerNorm(dim)
-        self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
-        self.proj = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim))
-
-    def forward(self, emb_a, emb_b):
-        a, b = emb_a.unsqueeze(1), emb_b.unsqueeze(1)
-        attn_a, _ = self.attn_a2b(query=a, key=b, value=b)
-        attn_b, _ = self.attn_b2a(query=b, key=a, value=a)
-        attn_a, attn_b = attn_a.squeeze(1), attn_b.squeeze(1)
-        g = self.gate(torch.cat([attn_a, attn_b], dim=-1))
-        fused = g * attn_a + (1 - g) * attn_b
-        fused = self.norm(fused + emb_a + emb_b)
-        fused = fused + self.proj(fused)
-        return F.normalize(fused, p=2, dim=-1)
-
-
-def _detect_cls_head(state_dict):
-    for k, v in state_dict.items():
-        if k == "cls_head.1.weight":
-            return v.shape[0]
-    return 256
-
-
-class MedSigLIPMultiTask(nn.Module):
-    def __init__(self, model_path, n_classes=4, cls_hidden=256):
-        super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
-        self.backbone = get_peft_model(self.backbone, LoraConfig(
-            r=16, lora_alpha=32, lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
-            bias="none",
-        ))
-        self.logit_scale = nn.Parameter(torch.ones([]) * torch.log(torch.tensor(1.0 / 0.07)))
-        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
-        dim = bb.config.vision_config.hidden_size
-        self.sev_head = nn.Sequential(
-            nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
-        )
-        if cls_hidden == 512:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim),
-                nn.Linear(dim, 512), nn.GELU(), nn.Dropout(0.3),
-                nn.Linear(512, 256), nn.GELU(), nn.Dropout(0.15),
-                nn.Linear(256, n_classes),
-            )
-        else:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
-            )
-        self.fusion = CrossAttentionFusion(dim, heads=4, dropout=0.1)
-
-    def encode_image(self, pixel_values):
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-    def encode_text(self, input_ids, attention_mask):
-        out = self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
+# EXTRACT EMBEDDINGS
 
 def clear_mem():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
 
+def _detect_cls_head(state_dict):
+    for k, v in state_dict.items():
+        if k in ["cls_head.1.weight", "classification_head.1.weight"]:
+            return v.shape[0] if len(v.shape) > 1 else v.shape[0]
+    return 256
 
-# ================================================================
-# EXTRACT EMBEDDINGS
-# ================================================================
 
 @torch.no_grad()
 def extract_all(model, loader, dataset):
@@ -184,17 +111,16 @@ def extract_all(model, loader, dataset):
     clear_mem()
 
     return {
-        "img_emb":  torch.cat(all_img),
-        "txt_emb":  torch.cat(all_txt),
-        "labels":   torch.cat(all_lbl),
-        "paths":    all_paths,
+        "img_emb": torch.cat(all_img).float(),
+        "txt_emb": torch.cat(all_txt).float(),
+        "labels": torch.cat(all_lbl),
+        "paths": all_paths,
         "diseases": all_diseases,
     }
 
 
-# ================================================================
 # RETRIEVAL R@K PER DISEASE
-# ================================================================
+
 
 def compute_retrieval_per_disease(img_emb, txt_emb, labels, diseases, classes):
     n = len(labels)
@@ -256,9 +182,9 @@ def compute_retrieval_per_disease(img_emb, txt_emb, labels, diseases, classes):
     return results, i2t_top, t2i_top
 
 
-# ================================================================
+
 # CONFUSION MATRIX RETRIEVAL
-# ================================================================
+
 
 def compute_retrieval_confusion(i2t_top, labels, classes):
     n = len(labels)
@@ -271,9 +197,9 @@ def compute_retrieval_confusion(i2t_top, labels, classes):
     return cm
 
 
-# ================================================================
+
 # FAILURE ANALYSIS
-# ================================================================
+
 
 def analyze_failures(i2t_top, labels, diseases, paths, classes):
     n = len(labels)
@@ -302,9 +228,9 @@ def analyze_failures(i2t_top, labels, diseases, paths, classes):
     return failures, per_class_stats
 
 
-# ================================================================
+
 # PLOTS
-# ================================================================
+
 
 def plot_retrieval_per_class(results, classes):
     fig, ax = plt.subplots(figsize=(12, 6))
@@ -319,7 +245,7 @@ def plot_retrieval_per_class(results, classes):
     ax.set_xticks(x + width)
     ax.set_xticklabels(classes, fontsize=12)
     ax.set_ylabel("Retrieval %", fontsize=12)
-    ax.set_title("MedSigLIP v13 — Avg R@1, R@2, R@3 per Disease", fontsize=14)
+    ax.set_title("MedSigLIP v13 - Avg R@1, R@2, R@3 per Disease", fontsize=14)
     ax.legend(fontsize=11)
     ax.set_ylim(0, 105)
     ax.grid(alpha=0.3, axis="y")
@@ -342,7 +268,7 @@ def plot_confusion_matrix(cm, classes):
     sns.heatmap(cm_norm, annot=True, fmt=".1f", cmap="Reds", xticklabels=classes, yticklabels=classes, ax=axes[1])
     axes[1].set_title("Retrieval Confusion (%)", fontsize=13)
     axes[1].set_ylabel("True Class"); axes[1].set_xlabel("Retrieved Class")
-    plt.suptitle("MedSigLIP v13 — Retrieval Confusion (I2T top-1)", fontsize=14)
+    plt.suptitle("MedSigLIP v13 - Retrieval Confusion (I2T top-1)", fontsize=14)
     plt.tight_layout()
     plt.savefig(f"{cfg.fig_dir}/retrieval_confusion.png", dpi=200)
     plt.close()
@@ -373,7 +299,7 @@ def plot_failure_breakdown(per_class_stats, classes):
     ax.set_xticks(x)
     ax.set_xticklabels(classes, fontsize=12)
     ax.set_ylabel("% of images", fontsize=12)
-    ax.set_title("MedSigLIP v13 — Retrieval Hit/Recovery/Miss per Disease", fontsize=14)
+    ax.set_title("MedSigLIP v13 - Retrieval Hit/Recovery/Miss per Disease", fontsize=14)
     ax.legend(fontsize=11)
     ax.set_ylim(0, 105)
     ax.grid(alpha=0.3, axis="y")
@@ -383,31 +309,43 @@ def plot_failure_breakdown(per_class_stats, classes):
     print(f"  Saved: {cfg.fig_dir}/failure_breakdown.png")
 
 
-# ================================================================
+
 # MAIN
-# ================================================================
+
 
 def main():
     set_seed()
 
     print("=" * 70)
-    print("  RETRIEVAL ANALYSIS — MedSigLIP v13")
+    print("  RETRIEVAL ANALYSIS - MedSigLIP v13")
     print("  R@1, R@2, R@3 per boala | Confusion | Failure analysis")
     print("=" * 70)
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
     ckpt = torch.load(cfg.ckpt_path, map_location="cpu", weights_only=False)
-    state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    state_dict = ckpt.get("model", ckpt)
+
+    # --- REMAPPING CHEI VECHI -> NOI ---
+    remapped = {
+        k.replace("sev_head.", "severity_head.")
+        .replace("cls_head.", "classification_head.")
+        .replace("fusion.attn_a2b.", "fusion.attn_a_to_b.")
+        .replace("fusion.attn_b2a.", "fusion.attn_b_to_a."): v
+        for k, v in state_dict.items()
+    }
 
     nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
-    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME",
+                                                                                                      "DRUSEN",
+                                                                                                      "NORMAL"]
 
-    cls_hidden = _detect_cls_head(state_dict)
+    cls_hidden = _detect_cls_head(remapped)
     print(f"  cls_head detected: hidden={cls_hidden} ({'probed' if cls_hidden == 512 else 'original'})")
 
+    # Ințializăm modelul folosind clasa importată din src.model.medsiglip
     model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc, cls_hidden=cls_hidden)
-    model.load_state_dict(state_dict)
+    model.load_state_dict(remapped, strict=False)  # strict=False este util când folosim LoRA
     model = model.to(cfg.device)
     model.eval()
     print(f"  Model: {cfg.ckpt_path}")

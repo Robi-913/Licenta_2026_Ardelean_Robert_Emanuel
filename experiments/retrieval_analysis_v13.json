@@ -1,58 +1,59 @@
 {
+  "n_images": 748,
   "retrieval_metrics": {
     "overall": {
-      "I2T_R@1": 79.81,
-      "I2T_R@2": 80.35,
-      "I2T_R@3": 80.75,
-      "I2T_R@5": 81.02,
-      "I2T_R@10": 82.49,
-      "T2I_R@1": 88.64,
-      "T2I_R@2": 98.8,
-      "T2I_R@3": 100.0,
-      "T2I_R@5": 100.0,
-      "T2I_R@10": 100.0,
-      "Avg_R@1": 84.22,
-      "Avg_R@2": 89.57,
-      "Avg_R@3": 90.38,
-      "Avg_R@5": 90.51,
-      "Avg_R@10": 91.25
+      "I2T_R@1": 83.96,
+      "I2T_R@2": 83.96,
+      "I2T_R@3": 83.96,
+      "I2T_R@5": 85.43,
+      "I2T_R@10": 86.5,
+      "T2I_R@1": 85.7,
+      "T2I_R@2": 94.52,
+      "T2I_R@3": 95.59,
+      "T2I_R@5": 98.4,
+      "T2I_R@10": 99.87,
+      "Avg_R@1": 84.83,
+      "Avg_R@2": 89.24,
+      "Avg_R@3": 89.78,
+      "Avg_R@5": 91.92,
+      "Avg_R@10": 93.19
     },
     "per_class": {
       "AMD": {
         "count": 339,
-        "I2T_R@1": 70.8,
-        "I2T_R@2": 71.68,
-        "I2T_R@3": 72.57,
-        "I2T_R@5": 72.86,
-        "I2T_R@10": 75.52,
-        "T2I_R@1": 85.55,
-        "T2I_R@2": 97.94,
-        "T2I_R@3": 100.0,
-        "T2I_R@5": 100.0,
-        "T2I_R@10": 100.0,
-        "Avg_R@1": 78.17,
-        "Avg_R@2": 84.81,
-        "Avg_R@3": 86.28,
-        "Avg_R@5": 86.43,
-        "Avg_R@10": 87.76
+        "I2T_R@1": 90.86,
+        "I2T_R@2": 90.86,
+        "I2T_R@3": 90.86,
+        "I2T_R@5": 91.15,
+        "I2T_R@10": 92.92,
+        "T2I_R@1": 68.44,
+        "T2I_R@2": 87.91,
+        "T2I_R@3": 90.27,
+        "T2I_R@5": 96.46,
+        "T2I_R@10": 99.71,
+        "Avg_R@1": 79.65,
+        "Avg_R@2": 89.38,
+        "Avg_R@3": 90.56,
+        "Avg_R@5": 93.81,
+        "Avg_R@10": 96.31
       },
       "DME": {
         "count": 191,
-        "I2T_R@1": 81.68,
-        "I2T_R@2": 81.68,
-        "I2T_R@3": 81.68,
-        "I2T_R@5": 82.2,
-        "I2T_R@10": 82.2,
+        "I2T_R@1": 84.29,
+        "I2T_R@2": 84.29,
+        "I2T_R@3": 84.29,
+        "I2T_R@5": 85.86,
+        "I2T_R@10": 85.86,
         "T2I_R@1": 100.0,
         "T2I_R@2": 100.0,
         "T2I_R@3": 100.0,
         "T2I_R@5": 100.0,
         "T2I_R@10": 100.0,
-        "Avg_R@1": 90.84,
-        "Avg_R@2": 90.84,
-        "Avg_R@3": 90.84,
-        "Avg_R@5": 91.1,
-        "Avg_R@10": 91.1
+        "Avg_R@1": 92.15,
+        "Avg_R@2": 92.15,
+        "Avg_R@3": 92.15,
+        "Avg_R@5": 92.93,
+        "Avg_R@10": 92.93
       },
       "DRUSEN": {
         "count": 8,
@@ -74,36 +75,68 @@
       },
       "NORMAL": {
         "count": 210,
-        "I2T_R@1": 92.38,
-        "I2T_R@2": 92.86,
-        "I2T_R@3": 92.86,
-        "I2T_R@5": 92.86,
-        "I2T_R@10": 93.81,
-        "T2I_R@1": 82.86,
-        "T2I_R@2": 99.05,
+        "I2T_R@1": 72.38,
+        "I2T_R@2": 72.38,
+        "I2T_R@3": 72.38,
+        "I2T_R@5": 75.71,
+        "I2T_R@10": 76.67,
+        "T2I_R@1": 100.0,
+        "T2I_R@2": 100.0,
         "T2I_R@3": 100.0,
         "T2I_R@5": 100.0,
         "T2I_R@10": 100.0,
-        "Avg_R@1": 87.62,
-        "Avg_R@2": 95.95,
-        "Avg_R@3": 96.43,
-        "Avg_R@5": 96.43,
-        "Avg_R@10": 96.91
+        "Avg_R@1": 86.19,
+        "Avg_R@2": 86.19,
+        "Avg_R@3": 86.19,
+        "Avg_R@5": 87.85,
+        "Avg_R@10": 88.34
       }
     }
   },
-  "failure_stats": {
+  "confusion_matrix": [
+    [
+      308,
+      0,
+      6,
+      25
+    ],
+    [
+      21,
+      161,
+      0,
+      9
+    ],
+    [
+      1,
+      0,
+      7,
+      0
+    ],
+    [
+      58,
+      0,
+      0,
+      152
+    ]
+  ],
+  "failure_counts": {
+    "r1_correct": 628,
+    "r1_miss_r2_hit": 0,
+    "r1_r2_miss_r3_hit": 0,
+    "r3_miss": 120
+  },
+  "per_class_stats": {
     "AMD": {
       "total": 339,
-      "r1_hit": 240,
-      "r2_hit": 243,
-      "r3_hit": 246
+      "r1_hit": 308,
+      "r2_hit": 308,
+      "r3_hit": 308
     },
     "DME": {
       "total": 191,
-      "r1_hit": 156,
-      "r2_hit": 156,
-      "r3_hit": 156
+      "r1_hit": 161,
+      "r2_hit": 161,
+      "r3_hit": 161
     },
     "DRUSEN": {
       "total": 8,
@@ -113,204 +146,17 @@
     },
     "NORMAL": {
       "total": 210,
-      "r1_hit": 194,
-      "r2_hit": 195,
-      "r3_hit": 195
+      "r1_hit": 152,
+      "r2_hit": 152,
+      "r3_hit": 152
     }
   },
-  "failure_examples": {
-    "r1_miss_r2_hit": [
-      {
-        "index": 19,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 4.png",
-        "top3_classes": [
-          "NORMAL",
-          "AMD",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 194,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (24).E2E\\2- 25- 2017 5- 17- 27 PM\\Image 41.png",
-        "top3_classes": [
-          "NORMAL",
-          "AMD",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 251,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (5).E2E\\2- 25- 2017 9- 17- 04 PM\\Image 1.png",
-        "top3_classes": [
-          "NORMAL",
-          "AMD",
-          "AMD"
-        ]
-      },
-      {
-        "index": 706,
-        "true_class": "NORMAL",
-        "retrieved_class": "AMD",
-        "path": "Normal Part2\\Normal (48).E2E\\2- 26- 2017 10- 23- 24 AM\\Image 17.png",
-        "top3_classes": [
-          "AMD",
-          "NORMAL",
-          "NORMAL"
-        ]
-      }
-    ],
-    "r1_miss_r3_hit": [
-      {
-        "index": 13,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 21.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "AMD"
-        ]
-      },
-      {
-        "index": 30,
-        "true_class": "AMD",
-        "retrieved_class": "DRUSEN",
-        "path": "AMD Part1\\AMD (10)\\Image (17).png",
-        "top3_classes": [
-          "DRUSEN",
-          "DRUSEN",
-          "AMD"
-        ]
-      },
-      {
-        "index": 63,
-        "true_class": "AMD",
-        "retrieved_class": "DRUSEN",
-        "path": "AMD Part1\\AMD (13).E2E\\2- 25- 2017 4- 48- 43 PM\\Image 33.png",
-        "top3_classes": [
-          "DRUSEN",
-          "DRUSEN",
-          "AMD"
-        ]
-      }
-    ],
-    "complete_misses": [
-      {
-        "index": 0,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 1.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 1,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 10.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 2,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 11.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 3,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 12.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 4,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 13.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 5,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 14.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 6,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 15.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 7,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 16.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 8,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 17.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      },
-      {
-        "index": 9,
-        "true_class": "AMD",
-        "retrieved_class": "NORMAL",
-        "path": "AMD Part1\\AMD (10).E2E\\2- 25- 2017 9- 27- 53 PM\\Image 18.png",
-        "top3_classes": [
-          "NORMAL",
-          "NORMAL",
-          "NORMAL"
-        ]
-      }
-    ]
+  "top_confusion_pairs": {
+    "NORMAL -> AMD": 58,
+    "AMD -> NORMAL": 25,
+    "DME -> AMD": 21,
+    "DME -> NORMAL": 9,
+    "AMD -> DRUSEN": 6,
+    "DRUSEN -> AMD": 1
   }
 }

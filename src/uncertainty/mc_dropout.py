@@ -28,6 +28,7 @@ from peft import LoraConfig, get_peft_model  # Adaugat pentru LoRA
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.utils.seed import set_seed
+from src.model.medsiglip import MedSigLIPMultiTask
 from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 
@@ -35,7 +36,7 @@ from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
 class Config:
     model_path = "models/medsiglip-448"
-    ckpt_path = "experiments/medsiglip_v13/ckpts/final_with_probe.pth"
+    ckpt_path = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
 
     test_csv = "data/oct5k/splits_v3/test.csv"
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
@@ -57,6 +58,12 @@ os.makedirs(cfg.fig_dir, exist_ok=True)
 
 # ---------- helper detecție probe ----------
 
+def clear_mem():
+    """Clears RAM and VRAM to prevent out-of-memory errors."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
 def _detect_cls_head(state_dict):
     for k, v in state_dict.items():
         # Verificăm intrarea în primul strat liniar din capul de clasificare
@@ -64,69 +71,13 @@ def _detect_cls_head(state_dict):
             return v.shape[0] if len(v.shape) > 1 else v.shape[0]
     return 256
 
-
-# ---------- model ----------
-
-class MedSigLIPMultiTask(nn.Module):
-
-    def __init__(self, model_path, n_classes=4, cls_hidden=256):
-        super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
-
-        # Aplicăm LoRA pe backbone
-        self.backbone = get_peft_model(self.backbone, LoraConfig(
-            r=16, lora_alpha=32, lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
-            bias="none",
-        ))
-
-        init_scale = torch.log(torch.tensor(1.0 / 0.07))
-        self.logit_scale = nn.Parameter(torch.ones([]) * init_scale)
-
-        # Preluăm corect dimensiunea hidden după integrarea LoRA
-        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
-        dim = bb.config.vision_config.hidden_size
-
-        self.sev_head = nn.Sequential(
-            nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
-        )
-
-        # Suport pentru Probe clasic vs complex
-        if cls_hidden == 512:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim),
-                nn.Linear(dim, 512), nn.GELU(), nn.Dropout(0.3),
-                nn.Linear(512, 256), nn.GELU(), nn.Dropout(0.15),
-                nn.Linear(256, n_classes),
-            )
-        else:
-            self.cls_head = nn.Sequential(
-                nn.LayerNorm(dim), nn.Linear(dim, 256), nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
-            )
-
-    def encode_image(self, pixel_values):
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-
-def clear_mem():
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    gc.collect()
-
+# ---------- mc dropout ----------
 
 def turn_on_dropout(model):
     # Această metodă va prinde inclusiv dropout-ul din modulele lora
     for m in model.modules():
         if isinstance(m, nn.Dropout):
             m.train()
-
-
-# ---------- mc dropout ----------
 
 def mc_predict(model, pv, n):
     model.eval()
@@ -138,8 +89,8 @@ def mc_predict(model, pv, n):
     for _ in range(n):
         with torch.no_grad(), autocast(cfg.device, enabled=cfg.amp):
             emb = model.encode_image(pv)
-            logits = model.cls_head(emb)
-            sp = model.sev_head(emb).squeeze(-1).clamp(0, 1)
+            logits = model.classification_head(emb)
+            sp = model.severity_head(emb).squeeze(-1).clamp(0, 1)
 
         probs_all.append(torch.softmax(logits, dim=1).cpu())
         sevs_all.append(sp.cpu())
@@ -187,16 +138,30 @@ def main():
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
     ckpt = torch.load(cfg.ckpt_path, map_location="cpu", weights_only=False)
-    state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+    state_dict = ckpt.get("model", ckpt)
+
+    # Remapping chei vechi -> noi
+    remapped = {
+        k.replace("sev_head.", "severity_head.")
+        .replace("cls_head.", "classification_head.")
+        .replace("fusion.attn_a2b.", "fusion.attn_a_to_b.")
+        .replace("fusion.attn_b2a.", "fusion.attn_b_to_a."): v
+        for k, v in state_dict.items()
+    }
 
     nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
-    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME",
+                                                                                                      "DRUSEN",
+                                                                                                      "NORMAL"]
 
-    cls_hidden = _detect_cls_head(state_dict)
-    print(f"  Detected cls_head hidden_dim: {cls_hidden}")
+    cls_hidden = 256
+    for key in ["classification_head.1.weight"]:
+        if key in remapped:
+            cls_hidden = remapped[key].shape[0]
+            break
 
     model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc, cls_hidden=cls_hidden)
-    model.load_state_dict(state_dict, strict=False)
+    model.load_state_dict(remapped, strict=False)
     model = model.to(cfg.device)
 
     ds = OCT5kDataset(

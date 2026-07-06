@@ -1,0 +1,156 @@
+{
+  "dataset": "OCT5k test set bbox only",
+  "thresholds": [
+    0.75,
+    0.7,
+    0.6,
+    0.5,
+    0.55,
+    0.6,
+    0.35,
+    0.1,
+    0.1
+  ],
+  "yolo": {
+    "model": "YOLO12s",
+    "per_biomarker": {
+      "Fluid": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accuracy": 98.81,
+        "n_positive": 4
+      },
+      "Geographicatrophy": {
+        "f1": 0.8889,
+        "precision": 1.0,
+        "recall": 0.8,
+        "accuracy": 98.81,
+        "n_positive": 20
+      },
+      "PRlayerdisruption": {
+        "f1": 0.8317,
+        "precision": 0.9882,
+        "recall": 0.7179,
+        "accuracy": 89.85,
+        "n_positive": 117
+      },
+      "SoftdrusenPED": {
+        "f1": 0.7568,
+        "precision": 0.8235,
+        "recall": 0.7,
+        "accuracy": 97.31,
+        "n_positive": 20
+      },
+      "Reticulardrusen": {
+        "f1": 0.5294,
+        "precision": 1.0,
+        "recall": 0.36,
+        "accuracy": 95.22,
+        "n_positive": 25
+      },
+      "Hyperfluorescentspots": {
+        "f1": 0.6222,
+        "precision": 1.0,
+        "recall": 0.4516,
+        "accuracy": 94.93,
+        "n_positive": 31
+      },
+      "Softdrusen": {
+        "f1": 0.9237,
+        "precision": 0.982,
+        "recall": 0.872,
+        "accuracy": 94.63,
+        "n_positive": 125
+      },
+      "Harddrusen": {
+        "f1": 0.8726,
+        "precision": 0.9928,
+        "recall": 0.7784,
+        "accuracy": 88.06,
+        "n_positive": 176
+      },
+      "Choroidalfolds": {
+        "f1": 0.8718,
+        "precision": 1.0,
+        "recall": 0.7727,
+        "accuracy": 98.51,
+        "n_positive": 22
+      }
+    },
+    "macro_f1": 0.6997,
+    "overall_f1": 0.8448,
+    "overall_acc": 95.12
+  },
+  "medsiglip": {
+    "model": "MedSigLIP v13 + Heads v5",
+    "per_biomarker": {
+      "Fluid": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accuracy": 98.81,
+        "n_positive": 4
+      },
+      "Geographicatrophy": {
+        "f1": 0.0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "accuracy": 93.43,
+        "n_positive": 20
+      },
+      "PRlayerdisruption": {
+        "f1": 0.4623,
+        "precision": 0.5158,
+        "recall": 0.4188,
+        "accuracy": 65.97,
+        "n_positive": 117
+      },
+      "SoftdrusenPED": {
+        "f1": 0.3529,
+        "precision": 0.4286,
+        "recall": 0.3,
+        "accuracy": 93.43,
+        "n_positive": 20
+      },
+      "Reticulardrusen": {
+        "f1": 0.0882,
+        "precision": 0.0698,
+        "recall": 0.12,
+        "accuracy": 81.49,
+        "n_positive": 25
+      },
+      "Hyperfluorescentspots": {
+        "f1": 0.272,
+        "precision": 0.1809,
+        "recall": 0.5484,
+        "accuracy": 72.84,
+        "n_positive": 31
+      },
+      "Softdrusen": {
+        "f1": 0.6278,
+        "precision": 0.5272,
+        "recall": 0.776,
+        "accuracy": 65.67,
+        "n_positive": 125
+      },
+      "Harddrusen": {
+        "f1": 0.7234,
+        "precision": 0.6194,
+        "recall": 0.8693,
+        "accuracy": 65.07,
+        "n_positive": 176
+      },
+      "Choroidalfolds": {
+        "f1": 0.1176,
+        "precision": 0.087,
+        "recall": 0.1818,
+        "accuracy": 82.09,
+        "n_positive": 22
+      }
+    },
+    "macro_f1": 0.2938,
+    "overall_f1": 0.5202,
+    "overall_acc": 79.87
+  }
+}

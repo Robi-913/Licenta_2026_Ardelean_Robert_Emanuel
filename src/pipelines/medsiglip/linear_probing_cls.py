@@ -1,18 +1,18 @@
 """
-Linear Probing — antreneaza DOAR cls_head pe features inghetate.
-
-Folosire:
-  python -m src.pipelines.medsiglip.linear_probe
+linear_probe.py — Linear Probing pe cls_head
 
 Ce face:
   1. Incarca best.pth din v13
   2. Ingheata TOT (backbone, LoRA, fusion, sev_head, logit_scale)
-  3. Reseteaza cls_head cu un MLP mai mare
-  4. Antreneaza cls_head singur pe features NORMALIZATE (spatiul contrastiv unde R@1=86%)
-  5. Salveaza best_probe.pth
+  3. Reseteaza cls_head cu un MLP mai adanc (512 hidden)
+  4. Antreneaza cls_head SINGUR pe features NORMALIZATE (spatiul contrastiv R@1=86%)
+  5. Salveaza final_with_probe.pth
 
-R@1 ramane neatins. Cls ar trebui sa urce semnificativ.
-Dureaza 3-5 minute.
+R@1 ramane neatins — nu atingem backbone-ul.
+Cls ar trebui sa urce semnificativ. Dureaza 3-5 minute.
+
+Rulare:
+    python -m src.pipelines.medsiglip.linear_probe
 """
 
 import os
@@ -25,155 +25,81 @@ from torch.amp import autocast
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
-from transformers import AutoModel, AutoProcessor
-from peft import LoraConfig, get_peft_model
+from transformers import AutoProcessor
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
 from src.datasets.oct5k_medsiglip import make_loaders, OCT5kDataset, collate_oct5k
+from src.model.medsiglip import MedSigLIPMultiTask
 from src.utils.seed import set_seed
 
 
-# ---------- config ----------
-
 class Config:
-    experiment_dir = "experiments/medsiglip_v13"
-    checkpoint = "experiments/medsiglip_v13/ckpts/best.pth"
-
+    experiment_dir = "experiments/medsiglip_v15/"
+    checkpoint = "experiments/medsiglip_v15/ckpts/best.pth"
     model_path = "models/medsiglip-448"
     splits_dir = "data/oct5k/splits_v3"
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
     severity_json = "data/oct5k/severity_scores_v2.json"
 
-    # LoRA — IDENTIC cu v12/v13
-    lora_r = 16
+    # LoRA — identic cu v13, altfel cheile din checkpoint nu se potrivesc
+    lora_rank = 16
     lora_alpha = 32
     lora_dropout = 0.05
 
-    # probe
+    # Probe head
     probe_epochs = 20
     probe_lr = 3e-4
     probe_wd = 0.01
-    probe_hidden = 512
+    probe_hidden = 512   # mai adanc decat head-ul original de 256
     probe_dropout = 0.3
 
+    batch_size = 32
     bs = 32
-    bbox_weight = 3.0
+    bbox_weight = 3.0     # oversampling pt imaginile cu leziuni adnotate
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    amp = torch.cuda.is_available()
+    use_amp = torch.cuda.is_available()
     workers = 0
 
 
 cfg = Config()
 
 
-# ---------- model (identic cu v12/v13) ----------
-
-class CrossAttentionFusion(nn.Module):
-    def __init__(self, dim, heads=4, dropout=0.1):
-        super().__init__()
-        self.attn_a2b = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.attn_b2a = nn.MultiheadAttention(dim, heads, dropout=dropout, batch_first=True)
-        self.norm = nn.LayerNorm(dim)
-        self.gate = nn.Sequential(nn.Linear(dim * 2, dim), nn.Sigmoid())
-        self.proj = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Dropout(dropout), nn.Linear(dim, dim))
-
-    def forward(self, emb_a, emb_b):
-        a, b = emb_a.unsqueeze(1), emb_b.unsqueeze(1)
-        attn_a, _ = self.attn_a2b(query=a, key=b, value=b)
-        attn_b, _ = self.attn_b2a(query=b, key=a, value=a)
-        attn_a, attn_b = attn_a.squeeze(1), attn_b.squeeze(1)
-        g = self.gate(torch.cat([attn_a, attn_b], dim=-1))
-        fused = g * attn_a + (1 - g) * attn_b
-        fused = self.norm(fused + emb_a + emb_b)
-        fused = fused + self.proj(fused)
-        return F.normalize(fused, p=2, dim=-1)
-
-
-class MedSigLIPMultiTask(nn.Module):
-    def __init__(self, model_path, n_classes=4):
-        super().__init__()
-        self.backbone = AutoModel.from_pretrained(model_path, torch_dtype=torch.float32)
-        self.backbone = get_peft_model(self.backbone, LoraConfig(
-            r=cfg.lora_r, lora_alpha=cfg.lora_alpha, lora_dropout=cfg.lora_dropout,
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"], bias="none",
-        ))
-        self.logit_scale = nn.Parameter(torch.ones([]) * torch.log(torch.tensor(1.0 / 0.07)))
-        bb = self.backbone.base_model.model if hasattr(self.backbone, "base_model") else self.backbone
-        self.dim = bb.config.vision_config.hidden_size
-        self.sev_head = nn.Sequential(
-            nn.LayerNorm(self.dim), nn.Linear(self.dim, 256),
-            nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, 1),
-        )
-        self.cls_head = nn.Sequential(
-            nn.LayerNorm(self.dim), nn.Linear(self.dim, 256),
-            nn.ReLU(), nn.Dropout(0.1), nn.Linear(256, n_classes),
-        )
-        self.fusion = CrossAttentionFusion(self.dim)
-
-    def encode_image(self, pixel_values):
-        out = self.backbone.get_image_features(pixel_values=pixel_values)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return out
-
-    def encode_text(self, input_ids, attention_mask):
-        out = self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
-        if hasattr(out, "pooler_output"):
-            out = out.pooler_output
-        elif hasattr(out, "last_hidden_state"):
-            out = out.last_hidden_state[:, 0]
-        return F.normalize(out, p=2, dim=-1)
-
-    def forward(self, pixel_values, ids_a, mask_a, ids_b, mask_b):
-        pooled = self.encode_image(pixel_values)
-        img_emb = F.normalize(pooled, p=2, dim=-1)
-        ea = self.encode_text(ids_a, mask_a)
-        eb = self.encode_text(ids_b, mask_b)
-        merged = self.fusion(ea, eb)
-        sev = self.sev_head(pooled).squeeze(-1).clamp(0, 1)
-        cls = self.cls_head(pooled)
-        return img_emb, ea, eb, merged, self.logit_scale, sev, cls
-
-
-# ---------- train loader ----------
-
-def make_train_loader(proc):
-    train_csv = f"{cfg.splits_dir}/train.csv"
+def build_train_loader(processor: AutoProcessor) -> tuple[OCT5kDataset, DataLoader]:
     ds = OCT5kDataset(
-        split_csv=train_csv, split_json=cfg.split_json,
-        severity_json=cfg.severity_json, processor=proc, mode="train",
+        split_csv=f"{cfg.splits_dir}/train.csv",
+        split_json=cfg.split_json,
+        severity_json=cfg.severity_json,
+        processor=processor,
+        mode="train",
     )
-    n_bbox = 0
-    if "has_bbox" in ds.df.columns:
-        weights = []
-        for bb in ds.df["has_bbox"]:
-            if bb:
-                weights.append(cfg.bbox_weight)
-                n_bbox += 1
-            else:
-                weights.append(1.0)
-    else:
-        weights = [1.0] * len(ds)
+
+    # Imaginile cu bbox (leziuni rare) sunt trase mai des din sampler
+    weights = [cfg.bbox_weight if has_bbox else 1.0
+               for has_bbox in ds.df.get("has_bbox", [False] * len(ds))]
+    n_bbox = sum(1 for w in weights if w > 1.0)
+
     sampler = WeightedRandomSampler(weights, num_samples=len(ds), replacement=True)
-    print(f"  Train: {len(ds)} ({n_bbox} bbox)")
-    return ds, DataLoader(
-        ds, batch_size=cfg.bs, sampler=sampler,
+    print(f"  Train: {len(ds)} imagini ({n_bbox} cu bbox, weight={cfg.bbox_weight}x)")
+
+    loader = DataLoader(
+        ds, batch_size=cfg.batch_size, sampler=sampler,
         num_workers=cfg.workers, pin_memory=True,
         collate_fn=collate_oct5k, drop_last=True,
     )
+    return ds, loader
 
-
-# ---------- full eval ----------
 
 @torch.no_grad()
-def full_eval(model, loader):
+def evaluate(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
+    """
+    Evalueaza complet: Recall@K, Cls Acc, SevMAE si scorul compozit.
+    Folosit atat inainte cat si dupa probe pt a compara.
+    """
     model.eval()
-    all_img, all_txt, all_lbl = [], [], []
-    all_sp, all_st, all_cp = [], [], []
+    all_img_embs, all_txt_embs, all_labels = [], [], []
+    all_sev_preds, all_sev_labels, all_cls_preds = [], [], []
 
     for batch in tqdm(loader, desc="  Eval", leave=False):
         pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
@@ -182,187 +108,199 @@ def full_eval(model, loader):
         ib = batch["input_ids_b"].to(cfg.device, non_blocking=True)
         mb = batch["attention_mask_b"].to(cfg.device, non_blocking=True)
 
-        with autocast(cfg.device, enabled=cfg.amp):
-            ie, ea, eb, te, _, sp, cl = model(pv, ia, ma, ib, mb)
+        with autocast(cfg.device, enabled=cfg.use_amp):
+            img_emb, _, _, fused_emb, _, sev_pred, cls_logits = model(pv, ia, ma, ib, mb)
 
-        all_img.append(ie.cpu())
-        all_txt.append(te.cpu())
-        all_lbl.append(batch["label"])
-        all_sp.append(sp.cpu())
-        all_st.append(batch["severity"])
-        all_cp.append(cl.argmax(1).cpu())
+        all_img_embs.append(img_emb.cpu())
+        all_txt_embs.append(fused_emb.cpu())
+        all_labels.append(batch["label"])
+        all_sev_preds.append(sev_pred.cpu())
+        all_sev_labels.append(batch["severity"])
+        all_cls_preds.append(cls_logits.argmax(1).cpu())
 
-    img_emb = torch.cat(all_img)
-    txt_emb = torch.cat(all_txt)
-    labels = torch.cat(all_lbl)
-
-    sim = img_emb @ txt_emb.T
+    img_embs = torch.cat(all_img_embs)
+    txt_embs = torch.cat(all_txt_embs)
+    labels = torch.cat(all_labels)
+    sim = img_embs @ txt_embs.T
     n = sim.shape[0]
-    out = {}
-    for tag, s in [("I2T", sim), ("T2I", sim.T)]:
+
+    metrics = {}
+    for tag, sim_mat in [("I2T", sim), ("T2I", sim.T)]:
         for k in [1, 5, 10]:
-            _, top = s.topk(k, dim=1)
-            hit = sum(labels[i] in labels[top[i]] for i in range(n))
-            out[f"{tag}_R@{k}"] = 100.0 * hit / n
+            _, top_k = sim_mat.topk(k, dim=1)
+            hits = sum(labels[i] in labels[top_k[i]] for i in range(n))
+            metrics[f"{tag}_R@{k}"] = 100.0 * hits / n
 
-    sp_pct = torch.cat(all_sp) * 100
-    st_pct = torch.cat(all_st) * 100
-    out["sev_mae"] = (sp_pct - st_pct).abs().mean().item()
+    sev_pred_pct  = torch.cat(all_sev_preds)  * 100
+    sev_label_pct = torch.cat(all_sev_labels) * 100
+    metrics["sev_mae"] = (sev_pred_pct - sev_label_pct).abs().mean().item()
+    metrics["cls_acc"] = (torch.cat(all_cls_preds) == labels).float().mean().item() * 100
 
-    cp = torch.cat(all_cp)
-    ct = torch.cat(all_lbl)
-    out["cls_acc"] = (cp == ct).float().mean().item() * 100
-
-    avg_r1 = (out["I2T_R@1"] + out["T2I_R@1"]) / 2
-    out["avg_r1"] = avg_r1
-    out["score"] = 0.5 * avg_r1 + 0.25 * out["cls_acc"] + 0.25 * max(0, 100 - out["sev_mae"])
-    return out
+    avg_r1 = (metrics["I2T_R@1"] + metrics["T2I_R@1"]) / 2
+    metrics["avg_r1"] = avg_r1
+    metrics["score"]  = 0.5 * avg_r1 + 0.25 * metrics["cls_acc"] + 0.25 * max(0, 100 - metrics["sev_mae"])
+    return metrics
 
 
-# ---------- main ----------
-
-def main():
-    print(f"{'=' * 60}")
-    print(f"  LINEAR PROBE — cls_head pe features normalizate")
-    print(f"  Checkpoint: {cfg.checkpoint}")
-    print(f"  Probe: {cfg.probe_epochs} epoci, lr={cfg.probe_lr}")
-    print(f"{'=' * 60}")
-
-    set_seed()
-    proc = AutoProcessor.from_pretrained(cfg.model_path)
-
-    train_ds, train_dl = make_train_loader(proc)
-    _, val_dl, test_dl = make_loaders(proc, cfg)
-
-    nc = train_ds.n_classes
-    print(f"  Val: {len(val_dl.dataset)} | Classes: {train_ds.classes}")
-
-    # incarca modelul
-    model = MedSigLIPMultiTask(cfg.model_path, n_classes=nc).to(cfg.device)
-    ckpt = torch.load(cfg.ckpt_path, map_location="cpu", weights_only=False)
-    for k in ckpt["model"]:
-        if "cls_head" in k:
-            print(k, ckpt["model"][k].shape)
-    model.load_state_dict(ckpt["model"])
-    print(f"  Loaded checkpoint (score={ckpt['best_score']:.1f})")
-
-    # eval INAINTE
-    print("\n  Eval INAINTE de linear probe:")
-    before = full_eval(model, val_dl)
-    print(f"    R@1={before['avg_r1']:.1f}% | Cls={before['cls_acc']:.1f}% | "
-          f"SevMAE={before['sev_mae']:.1f}% | Score={before['score']:.1f}")
-
-    # ingheata TOT
-    for p in model.parameters():
-        p.requires_grad = False
-
-    # cls_head nou
-    dim = model.dim
-    model.cls_head = nn.Sequential(
-        nn.LayerNorm(dim),
-        nn.Linear(dim, cfg.probe_hidden),
+def build_probe_head(embed_dim: int, n_classes: int) -> nn.Sequential:
+    """
+    MLP mai adanc decat head-ul original (256) — doua straturi ascunse cu GELU.
+    Antreneaza pe features L2-normalizate din spatiul contrastiv.
+    """
+    return nn.Sequential(
+        nn.LayerNorm(embed_dim),
+        nn.Linear(embed_dim, cfg.probe_hidden),
         nn.GELU(),
         nn.Dropout(cfg.probe_dropout),
         nn.Linear(cfg.probe_hidden, cfg.probe_hidden // 2),
         nn.GELU(),
         nn.Dropout(cfg.probe_dropout / 2),
-        nn.Linear(cfg.probe_hidden // 2, nc),
+        nn.Linear(cfg.probe_hidden // 2, n_classes),
+    )
+
+
+def main():
+    print(f"  LINEAR PROBE — cls_head pe features normalizate")
+    print(f"  Checkpoint: {cfg.checkpoint}")
+    print(f"  Probe: {cfg.probe_epochs} epoci, lr={cfg.probe_lr}")
+
+    set_seed()
+
+    processor = AutoProcessor.from_pretrained(cfg.model_path)
+    train_ds, train_loader = build_train_loader(processor)
+    _, val_loader, test_loader = make_loaders(processor, cfg)
+
+    n_classes = train_ds.n_classes
+    print(f"  Val: {len(val_loader.dataset)} | Classes: {train_ds.classes}")
+
+    # Incarcam modelul complet din checkpointul v13
+    model = MedSigLIPMultiTask(
+        cfg.model_path,
+        n_classes=n_classes,
+        lora_rank=cfg.lora_rank,
+        lora_alpha=cfg.lora_alpha,
+        lora_dropout=cfg.lora_dropout,
     ).to(cfg.device)
 
-    for p in model.cls_head.parameters():
-        p.requires_grad = True
+    ckpt = torch.load(cfg.checkpoint, map_location="cpu", weights_only=False)
+    model.load_state_dict(ckpt["model"])
+    print(f"  Checkpoint incarcat (score={ckpt['best_score']:.1f})")
 
-    n_params = sum(p.numel() for p in model.cls_head.parameters())
-    print(f"\n  Cls head nou: {n_params:,} params")
+    # Evaluare de baza inainte de probe
+    print("\n  Eval INAINTE de linear probe:")
+    before = evaluate(model, val_loader)
+    print(f"    R@1={before['avg_r1']:.1f}% | Cls={before['cls_acc']:.1f}% | "
+          f"SevMAE={before['sev_mae']:.1f}% | Score={before['score']:.1f}")
 
-    opt = torch.optim.AdamW(model.cls_head.parameters(), lr=cfg.probe_lr, weight_decay=cfg.probe_wd)
-    sched = CosineAnnealingLR(opt, T_max=cfg.probe_epochs, eta_min=1e-5)
-    cls_fn = nn.CrossEntropyLoss()
+    # Inghetam TOT — niciun gradient nu trece prin backbone, fusion sau sev_head
+    for param in model.parameters():
+        param.requires_grad = False
 
-    best_acc = 0.0
-    best_ep = 0
+    # Inlocuim cls_head cu unul mai adanc si dezghetam DOAR el
+    model.classification_head = build_probe_head(model.embed_dim, n_classes).to(cfg.device)
+    for param in model.classification_head.parameters():
+        param.requires_grad = True
+
+    n_probe_params = sum(p.numel() for p in model.classification_head.parameters())
+    print(f"\n  Probe head nou: {n_probe_params:,} parametri trainable")
+
+    optimizer = torch.optim.AdamW(
+        model.classification_head.parameters(),
+        lr=cfg.probe_lr,
+        weight_decay=cfg.probe_wd,
+    )
+    scheduler = CosineAnnealingLR(optimizer, T_max=cfg.probe_epochs, eta_min=1e-5)
+    cls_loss_fn = nn.CrossEntropyLoss()
+
+    best_val_acc = 0.0
+    best_epoch = 0
 
     print(f"\n  Training cls_head ({cfg.probe_epochs} epoci)...\n")
 
-    for ep in range(cfg.probe_epochs):
-        model.train()
-        tot_loss, tot_ok, tot_n = 0, 0, 0
+    for epoch in range(cfg.probe_epochs):
+        model.eval()
+        model.classification_head.train()
+        tot_loss, n_correct, n_total = 0.0, 0, 0
 
-        for batch in tqdm(train_dl, desc=f"  Probe {ep+1}/{cfg.probe_epochs}", leave=False):
+        for batch in tqdm(train_loader, desc=f"  Probe {epoch + 1}/{cfg.probe_epochs}", leave=False):
             pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
             labels = batch["label"].to(cfg.device, non_blocking=True)
 
-            # features normalizate (spatiul contrastiv) — inghetate
+            # Extragem features inghetate in spatiul contrastiv (L2-normalizat)
+            # torch.no_grad() explicit — backbone e frozen dar evitam si alocarea grafului
             with torch.no_grad():
-                with autocast(cfg.device, enabled=cfg.amp):
-                    pooled = F.normalize(model.encode_image(pv), p=2, dim=-1)
+                with autocast(cfg.device, enabled=cfg.use_amp):
+                    pooled_norm = F.normalize(model.encode_image(pv), p=2, dim=-1)
 
-            # doar cls_head primeste gradient
-            with autocast(cfg.device, enabled=cfg.amp):
-                logits = model.cls_head(pooled)
-                loss = cls_fn(logits, labels)
+            # Doar classification_head primeste gradient
+            with autocast(cfg.device, enabled=cfg.use_amp):
+                logits = model.classification_head(pooled_norm)
+                loss = cls_loss_fn(logits, labels)
 
-            opt.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
-            opt.step()
+            optimizer.step()
 
             tot_loss += loss.item() * len(labels)
-            tot_ok += (logits.argmax(1) == labels).sum().item()
-            tot_n += len(labels)
+            n_correct += (logits.argmax(1) == labels).sum().item()
+            n_total += len(labels)
 
-        sched.step()
+        scheduler.step()
 
-        # val — tot pe features normalizate
+        # Validare rapida pe cls_acc — fara retrieval (e prea lent per epoca)
         model.eval()
-        val_ok, val_n = 0, 0
+        val_correct, val_total = 0, 0
         with torch.no_grad():
-            for batch in val_dl:
+            for batch in val_loader:
                 pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
                 labels = batch["label"].to(cfg.device, non_blocking=True)
-                with autocast(cfg.device, enabled=cfg.amp):
-                    pooled = F.normalize(model.encode_image(pv), p=2, dim=-1)
-                    logits = model.cls_head(pooled)
-                val_ok += (logits.argmax(1) == labels).sum().item()
-                val_n += len(labels)
+                with autocast(cfg.device, enabled=cfg.use_amp):
+                    pooled_norm = F.normalize(model.encode_image(pv), p=2, dim=-1)
+                    logits = model.classification_head(pooled_norm)
+                val_correct += (logits.argmax(1) == labels).sum().item()
+                val_total += len(labels)
 
-        train_acc = 100.0 * tot_ok / tot_n
-        val_acc = 100.0 * val_ok / val_n
-        train_loss = tot_loss / tot_n
+        train_acc = 100.0 * n_correct / n_total
+        val_acc = 100.0 * val_correct / val_total
+        train_loss = tot_loss / n_total
 
-        marker = ""
-        if val_acc > best_acc:
-            best_acc = val_acc
-            best_ep = ep + 1
+        improved = val_acc > best_val_acc
+        if improved:
+            best_val_acc = val_acc
+            best_epoch = epoch + 1
             torch.save(model.state_dict(), f"{cfg.experiment_dir}/ckpts/best_probe.pth")
-            marker = f"  ★ Best: {best_acc:.1f}%"
 
-        print(f"  Ep {ep+1}: Loss={train_loss:.4f} | Train={train_acc:.1f}% | Val={val_acc:.1f}%{marker}")
+        marker = f"  ★ Best: {best_val_acc:.1f}%" if improved else ""
+        print(f"  Ep {epoch + 1}: Loss={train_loss:.4f} | Train={train_acc:.1f}% | Val={val_acc:.1f}%{marker}")
 
-    # eval complet cu best probe
-    model.load_state_dict(
-        torch.load(f"{cfg.experiment_dir}/ckpts/best_probe.pth", map_location=cfg.device, weights_only=False)
+    # Evaluare completa cu best probe checkpoint
+    best_state = torch.load(
+        f"{cfg.experiment_dir}/ckpts/best_probe.pth",
+        map_location=cfg.device,
+        weights_only=False,
     )
+    model.load_state_dict(best_state)
 
-    print(f"\n  Eval DUPA linear probe (best ep {best_ep}):")
-    after = full_eval(model, val_dl)
+    print(f"\n  Eval DUPA linear probe (best epoch {best_epoch}):")
+    after = evaluate(model, val_loader)
     print(f"    R@1={after['avg_r1']:.1f}% | Cls={after['cls_acc']:.1f}% | "
           f"SevMAE={after['sev_mae']:.1f}% | Score={after['score']:.1f}")
 
-    if test_dl is not None:
+    if test_loader is not None:
         print(f"\n  Eval pe TEST SET:")
-        test_m = full_eval(model, test_dl)
+        test_m = evaluate(model, test_loader)
         print(f"    R@1={test_m['avg_r1']:.1f}% | Cls={test_m['cls_acc']:.1f}% | "
               f"SevMAE={test_m['sev_mae']:.1f}% | Score={test_m['score']:.1f}")
 
+    # Salvam starea finala — aceasta e folosita de eval.py si gradio_app
     torch.save(model.state_dict(), f"{cfg.experiment_dir}/ckpts/final_with_probe.pth")
 
-    print(f"\n{'=' * 60}")
-    print(f"  DONE!")
-    print(f"  Cls: {before['cls_acc']:.1f}% -> {after['cls_acc']:.1f}% (+{after['cls_acc'] - before['cls_acc']:.1f}%)")
-    print(f"  R@1: {before['avg_r1']:.1f}% -> {after['avg_r1']:.1f}% (neschimbat)")
+    print(f"\n  DONE!")
+    print(f"  Cls:   {before['cls_acc']:.1f}% -> {after['cls_acc']:.1f}% "
+          f"(+{after['cls_acc'] - before['cls_acc']:.1f}%)")
+    print(f"  R@1:   {before['avg_r1']:.1f}% -> {after['avg_r1']:.1f}% (neschimbat)")
     print(f"  Score: {before['score']:.1f} -> {after['score']:.1f}")
     print(f"  Saved: {cfg.experiment_dir}/ckpts/final_with_probe.pth")
-    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

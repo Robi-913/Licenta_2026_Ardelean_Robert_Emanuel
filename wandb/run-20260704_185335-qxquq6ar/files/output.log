@@ -1,0 +1,40 @@
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49406. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49407. This may result in unexpected behavior.
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 imagini (1447 cu bbox, weight=3.0x)
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 12713.70it/s]
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1369: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:40.)
+  return t.to(
+Epoch 1/35:  18%|█████████████████████████▌                                                                                                                    | 67/372 [15:09<1:09:01, 13.58s/it, C=1.846, CL=1.337, L=4.148, S=0.277]
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 574, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 262, in run_train
+    scaler.scale(loss / cfg.accum).backward()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\_tensor.py", line 631, in backward
+    torch.autograd.backward(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\autograd\__init__.py", line 379, in backward
+    _engine_run_backward(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\autograd\graph.py", line 882, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 638, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 574, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 262, in run_train
+    scaler.scale(loss / cfg.accum).backward()
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\_tensor.py", line 631, in backward
+    torch.autograd.backward(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\autograd\__init__.py", line 379, in backward
+    _engine_run_backward(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\autograd\graph.py", line 882, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt

@@ -11,7 +11,12 @@ SKIP_CONTENTS = {
     "metadata",
     "prompts",
     "Scripts",
-    "splits"}
+    "splits,",
+    "splits_v2"
+    "splits_v3",
+    "splits_biomk",
+    "metadata",
+    "metadata_v2"}
 
 
 def build_tree(folder, prefix, result):

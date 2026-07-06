@@ -1,8 +1,20 @@
 .
 ├── __init__.py
 ├── checkpoints
-│   ├── medsiglip_final.pth
+│   ├── medsiglip_v10_final.pth
+│   ├── medsiglip_v11_final.pth
+│   ├── medsiglip_v12_final.pth
+│   ├── medsiglip_v1_final.pth
+│   ├── medsiglip_v2_final.pth
+│   ├── medsiglip_v3_final.pth
+│   ├── medsiglip_v4_final.pth
+│   ├── medsiglip_v5_final.pth
+│   ├── medsiglip_v6_final.pth
+│   ├── medsiglip_v7_final.pth
+│   ├── medsiglip_v8_final.pth
+│   ├── medsiglip_v9_final.pth
 │   ├── resnet18_final.pth
+│   ├── resnet18_v2_final.pth
 │   ├── siglip_final.pth
 │   ├── siglip_image_encoder.pth
 │   └── siglip_text_encoder.pth
@@ -12,15 +24,39 @@
 │   │   ├── Detection
 │   │   ├── Images
 │   │   ├── Masks
-│   │   ├── README.txt
 │   │   ├── Scripts
 │   │   ├── medgemma_prompts.json
 │   │   ├── medgemma_prompts_split.json
+│   │   ├── medgemma_prompts_split_v2_27b.json
+│   │   ├── medgemma_prompts_split_v2_4b.json
+│   │   ├── medgemma_prompts_v2_27b.json
+│   │   ├── medgemma_prompts_v2_4b.json
 │   │   ├── metadata
-│   │   ├── prompts
+│   │   ├── metadata_v2
 │   │   ├── severity_scores.json
 │   │   ├── severity_scores_backup.json
-│   │   └── splits
+│   │   ├── severity_scores_combined.json
+│   │   ├── severity_scores_v2.json
+│   │   ├── splits
+│   │   │   ├── test.csv
+│   │   │   ├── train.csv
+│   │   │   ├── train_bbox_only.csv
+│   │   │   └── val.csv
+│   │   ├── splits_biomk
+│   │   ├── splits_v2
+│   │   │   ├── test.csv
+│   │   │   ├── train.csv
+│   │   │   ├── train_bbox_only.csv
+│   │   │   └── val.csv
+│   │   ├── splits_v3
+│   │   │   ├── test.csv
+│   │   │   ├── test_patients.csv
+│   │   │   ├── train.csv
+│   │   │   ├── train_bbox_only.csv
+│   │   │   ├── train_patients.csv
+│   │   │   ├── val.csv
+│   │   │   └── val_patients.csv
+│   │   └── yolo_bboxes.json
 │   └── old
 │       ├── prompts_expanded.json
 │       ├── prompts_expanded_all.json
@@ -42,41 +78,197 @@
 │       │       ├── DRUSEN
 │       │       └── NORMAL
 │       └── splits
+│           ├── test.csv
+│           ├── train.csv
+│           └── val.csv
 ├── experiments
+│   ├── biomarker_heads
+│   │   ├── ckpts
+│   │   │   └── best.pth
+│   │   └── training_history.csv
+│   ├── biomarker_heads_v2
+│   │   ├── ckpts
+│   │   │   └── best.pth
+│   │   └── training_history.csv
+│   ├── biomarker_heads_v3
+│   │   ├── ckpts
+│   │   │   └── best.pth
+│   │   └── training_history.csv
+│   ├── biomarker_heads_v4
+│   │   ├── ckpts
+│   │   │   └── best.pth
+│   │   └── training_history.csv
+│   ├── biomarker_heads_v5
+│   │   └── ckpts
+│   │       └── best.pth
 │   ├── cnn_baseline
 │   │   ├── checkpoints
 │   │   │   └── best.pth
 │   │   ├── confusion_matrix.png
 │   │   ├── loss_curves.png
 │   │   └── metrics.csv
+│   ├── cnn_v2
+│   │   ├── ckpts
+│   │   │   └── best.pth
+│   │   ├── confusion_matrix.png
+│   │   ├── loss_curves.png
+│   │   └── metrics.csv
 │   ├── eval_results.json
+│   ├── eval_results_v13.json
+│   ├── eval_results_v5.json
 │   ├── figures
-│   │   ├── cnn_confusion_matrix.png
+│   │   ├── biomarker_distribution.pdf
+│   │   ├── biomarker_distribution.png
+│   │   ├── eval
+│   │   │   ├── cnn_cm.png
+│   │   │   ├── comparison.png
+│   │   │   ├── medsiglip_cm.png
+│   │   │   ├── medsiglip_sev_per_class.png
+│   │   │   ├── medsiglip_sev_scatter.png
+│   │   │   └── medsiglip_v13_cm.png
 │   │   ├── gradcam
-│   │   │   ├── AMD_0.png
-│   │   │   ├── AMD_2.png
-│   │   │   ├── AMD_3.png
-│   │   │   ├── AMD_7.png
-│   │   │   ├── DME_11.png
-│   │   │   ├── DME_5.png
-│   │   │   ├── DME_6.png
-│   │   │   ├── DME_8.png
-│   │   │   ├── DRUSEN_1.png
-│   │   │   ├── DRUSEN_103.png
-│   │   │   ├── DRUSEN_164.png
-│   │   │   ├── DRUSEN_88.png
-│   │   │   ├── NORMAL_10.png
-│   │   │   ├── NORMAL_13.png
-│   │   │   ├── NORMAL_4.png
-│   │   │   └── NORMAL_9.png
-│   │   ├── gradcam_grid.png
-│   │   ├── medsiglip_confusion_matrix.png
-│   │   ├── medsiglip_severity_per_class.png
-│   │   ├── medsiglip_severity_scatter.png
-│   │   ├── model_comparison.png
-│   │   ├── tsne_by_disease.png
-│   │   ├── tsne_by_severity.png
-│   │   └── tsne_predictions.png
+│   │   │   ├── chefer_AMD_0.png
+│   │   │   ├── chefer_AMD_1.png
+│   │   │   ├── chefer_DME_2.png
+│   │   │   ├── chefer_DME_3.png
+│   │   │   ├── chefer_DRUSEN_4.png
+│   │   │   ├── chefer_DRUSEN_5.png
+│   │   │   ├── chefer_NORMAL_6.png
+│   │   │   ├── chefer_NORMAL_7.png
+│   │   │   ├── chefer_grid.png
+│   │   │   ├── eigencam_AMD_0.png
+│   │   │   ├── eigencam_AMD_1.png
+│   │   │   ├── eigencam_AMD_2.png
+│   │   │   ├── eigencam_AMD_3.png
+│   │   │   ├── eigencam_DME_2.png
+│   │   │   ├── eigencam_DME_3.png
+│   │   │   ├── eigencam_DME_4.png
+│   │   │   ├── eigencam_DME_5.png
+│   │   │   ├── eigencam_DME_6.png
+│   │   │   ├── eigencam_DME_7.png
+│   │   │   ├── eigencam_DRUSEN_10.png
+│   │   │   ├── eigencam_DRUSEN_11.png
+│   │   │   ├── eigencam_DRUSEN_4.png
+│   │   │   ├── eigencam_DRUSEN_5.png
+│   │   │   ├── eigencam_DRUSEN_8.png
+│   │   │   ├── eigencam_DRUSEN_9.png
+│   │   │   ├── eigencam_NORMAL_12.png
+│   │   │   ├── eigencam_NORMAL_13.png
+│   │   │   ├── eigencam_NORMAL_14.png
+│   │   │   ├── eigencam_NORMAL_15.png
+│   │   │   ├── eigencam_NORMAL_6.png
+│   │   │   ├── eigencam_NORMAL_7.png
+│   │   │   ├── eigencam_grid.png
+│   │   │   ├── eigencam_grid_2.png
+│   │   │   ├── gradcam++_AMD_0.png
+│   │   │   ├── gradcam++_AMD_1.png
+│   │   │   ├── gradcam++_DME_2.png
+│   │   │   ├── gradcam++_DME_3.png
+│   │   │   ├── gradcam++_DRUSEN_4.png
+│   │   │   ├── gradcam++_DRUSEN_5.png
+│   │   │   ├── gradcam++_NORMAL_6.png
+│   │   │   ├── gradcam++_NORMAL_7.png
+│   │   │   ├── gradcam++_grid.png
+│   │   │   ├── rollout_AMD_0.png
+│   │   │   ├── rollout_AMD_1.png
+│   │   │   ├── rollout_AMD_2.png
+│   │   │   ├── rollout_AMD_3.png
+│   │   │   ├── rollout_DME_2.png
+│   │   │   ├── rollout_DME_3.png
+│   │   │   ├── rollout_DME_4.png
+│   │   │   ├── rollout_DME_5.png
+│   │   │   ├── rollout_DME_6.png
+│   │   │   ├── rollout_DME_7.png
+│   │   │   ├── rollout_DRUSEN_10.png
+│   │   │   ├── rollout_DRUSEN_11.png
+│   │   │   ├── rollout_DRUSEN_4.png
+│   │   │   ├── rollout_DRUSEN_5.png
+│   │   │   ├── rollout_DRUSEN_8.png
+│   │   │   ├── rollout_DRUSEN_9.png
+│   │   │   ├── rollout_NORMAL_12.png
+│   │   │   ├── rollout_NORMAL_13.png
+│   │   │   ├── rollout_NORMAL_14.png
+│   │   │   ├── rollout_NORMAL_15.png
+│   │   │   ├── rollout_NORMAL_6.png
+│   │   │   ├── rollout_NORMAL_7.png
+│   │   │   └── rollout_grid.png
+│   │   ├── gradcam_v5
+│   │   │   ├── eigencam_AMD_0.png
+│   │   │   ├── eigencam_AMD_1.png
+│   │   │   ├── eigencam_AMD_2.png
+│   │   │   ├── eigencam_AMD_3.png
+│   │   │   ├── eigencam_DME_4.png
+│   │   │   ├── eigencam_DME_5.png
+│   │   │   ├── eigencam_DME_6.png
+│   │   │   ├── eigencam_DME_7.png
+│   │   │   ├── eigencam_DRUSEN_10.png
+│   │   │   ├── eigencam_DRUSEN_11.png
+│   │   │   ├── eigencam_DRUSEN_8.png
+│   │   │   ├── eigencam_DRUSEN_9.png
+│   │   │   ├── eigencam_NORMAL_12.png
+│   │   │   ├── eigencam_NORMAL_13.png
+│   │   │   ├── eigencam_NORMAL_14.png
+│   │   │   ├── eigencam_NORMAL_15.png
+│   │   │   └── eigencam_grid.png
+│   │   ├── old
+│   │   │   ├── calibration_diagram.png
+│   │   │   ├── cnn_confusion_matrix.png
+│   │   │   ├── gradcam_grid.png
+│   │   │   ├── medsiglip_confusion_matrix.png
+│   │   │   ├── medsiglip_severity_per_class.png
+│   │   │   ├── medsiglip_severity_scatter.png
+│   │   │   ├── model_comparison.png
+│   │   │   ├── tsne_by_disease.png
+│   │   │   ├── tsne_by_severity.png
+│   │   │   ├── tsne_predictions.png
+│   │   │   └── uncertainty_analysis.png
+│   │   ├── retrieval
+│   │   │   ├── failure_cases.png
+│   │   │   ├── i2t_grid.png
+│   │   │   ├── retrieval_per_class.png
+│   │   │   ├── similarity_dist.png
+│   │   │   └── t2i_grid.png
+│   │   ├── retrieval_analysis
+│   │   │   ├── failure_breakdown.png
+│   │   │   ├── retrieval_confusion.png
+│   │   │   └── retrieval_per_class.png
+│   │   ├── retrieval_analysis_v13
+│   │   │   ├── failure_breakdown.png
+│   │   │   ├── retrieval_confusion.png
+│   │   │   └── retrieval_per_class.png
+│   │   ├── retrieval_demo_lora
+│   │   │   ├── failure_cases.png
+│   │   │   ├── i2t_grid.png
+│   │   │   ├── retrieval_per_class.png
+│   │   │   ├── similarity_dist.png
+│   │   │   └── t2i_grid.png
+│   │   ├── retrieval_v5
+│   │   │   ├── failure_cases.png
+│   │   │   ├── i2t_grid.png
+│   │   │   ├── retrieval_per_class.png
+│   │   │   ├── similarity_dist.png
+│   │   │   └── t2i_grid.png
+│   │   ├── tsne
+│   │   │   ├── tsne_by_disease.png
+│   │   │   ├── tsne_by_severity.png
+│   │   │   └── tsne_predictions.png
+│   │   ├── tsne_v13
+│   │   │   ├── tsne_by_disease.png
+│   │   │   ├── tsne_by_severity.png
+│   │   │   └── tsne_predictions.png
+│   │   ├── tsne_v5
+│   │   │   ├── tsne_by_disease.png
+│   │   │   ├── tsne_by_severity.png
+│   │   │   └── tsne_predictions.png
+│   │   ├── uncertainty
+│   │   │   ├── calibration_diagram.png
+│   │   │   └── uncertainty_analysis.png
+│   │   ├── uncertainty_v13
+│   │   │   ├── calibration_diagram.png
+│   │   │   └── uncertainty_analysis.png
+│   │   └── uncertainty_v5
+│   │       ├── calibration_diagram.png
+│   │       └── uncertainty_analysis.png
 │   ├── image_encoder_pretrain
 │   │   ├── checkpoints
 │   │   │   ├── best_encoder.pth
@@ -86,12 +278,90 @@
 │   │   ├── confusion_matrix.png
 │   │   ├── training_curves.png
 │   │   └── training_history.csv
-│   ├── medsiglip_pipeline
+│   ├── medsiglip_v10
 │   │   ├── ckpts
 │   │   │   ├── best.pth
 │   │   │   └── last.pth
 │   │   ├── training_curves.png
 │   │   └── training_history.csv
+│   ├── medsiglip_v11
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v12
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   ├── best_probe.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v13
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   ├── best_probe.pth
+│   │   │   ├── final_with_probe.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v14_mirage
+│   │   └── ckpts
+│   │       ├── best.pth
+│   │       └── last.pth
+│   ├── medsiglip_v2
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v3
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v4
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v5
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v6
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v7
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v8
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── medsiglip_v9
+│   │   ├── ckpts
+│   │   │   ├── best.pth
+│   │   │   └── last.pth
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── retrieval_analysis.json
+│   ├── retrieval_analysis_v13.json
+│   ├── retrieval_demo_results.json
+│   ├── retrieval_results.json
+│   ├── retrieval_v5_results.json
 │   ├── siglip
 │   │   ├── checkpoints
 │   │   │   ├── best.pth
@@ -100,18 +370,136 @@
 │   │   │   └── final.pth
 │   │   ├── training_curves.png
 │   │   └── training_history.csv
-│   └── text_encoder_pretrain
-│       ├── checkpoints
-│       │   ├── best_encoder.pth
-│       │   ├── final_encoder.pth
-│       │   └── last.pth
-│       ├── classification_report.txt
-│       ├── confusion_matrix.png
-│       ├── training_curves.png
-│       └── training_history.csv
+│   ├── text_encoder_pretrain
+│   │   ├── checkpoints
+│   │   │   ├── best_encoder.pth
+│   │   │   ├── final_encoder.pth
+│   │   │   └── last.pth
+│   │   ├── classification_report.txt
+│   │   ├── confusion_matrix.png
+│   │   ├── training_curves.png
+│   │   └── training_history.csv
+│   ├── uncertainty_results.json
+│   ├── uncertainty_v13_results.json
+│   ├── uncertainty_v5_results.json
+│   ├── yolo_predictions
+│   │   └── pred_Image 10.png
+│   ├── yolo_vs_medsiglip.json
+│   ├── yolo_vs_medsiglip_v2.json
+│   ├── yolo_vs_medsiglip_v3.json
+│   ├── yolo_vs_medsiglip_v5.json
+│   ├── zero_shot_V4_results.json
+│   ├── zero_shot_v10_results.json
+│   ├── zero_shot_v11_results.json
+│   ├── zero_shot_v12_results.json
+│   ├── zero_shot_v13_results.json
+│   ├── zero_shot_v5_results.json
+│   ├── zero_shot_v6_results.json
+│   ├── zero_shot_v7_results.json
+│   ├── zero_shot_v8_results.json
+│   └── zero_shot_v9_results.json
 ├── gen_tree.py
 ├── models
 │   ├── medgemma-1.5-4b-it
+│   │   ├── .cache
+│   │   │   └── huggingface
+│   │   │       ├── CACHEDIR.TAG
+│   │   │       └── download
+│   │   │           ├── .gitattributes.metadata
+│   │   │           ├── README.md.metadata
+│   │   │           ├── added_tokens.json.metadata
+│   │   │           ├── chat_template.jinja.metadata
+│   │   │           ├── config.json.metadata
+│   │   │           ├── generation_config.json.metadata
+│   │   │           ├── model-00001-of-00002.safetensors.metadata
+│   │   │           ├── model-00002-of-00002.safetensors.metadata
+│   │   │           ├── model.safetensors.index.json.metadata
+│   │   │           ├── preprocessor_config.json.metadata
+│   │   │           ├── processor_config.json.metadata
+│   │   │           ├── special_tokens_map.json.metadata
+│   │   │           ├── tokenizer.json.metadata
+│   │   │           ├── tokenizer.model.metadata
+│   │   │           └── tokenizer_config.json.metadata
+│   │   ├── README.md
+│   │   ├── added_tokens.json
+│   │   ├── chat_template.jinja
+│   │   ├── config.json
+│   │   ├── generation_config.json
+│   │   ├── model-00001-of-00002.safetensors
+│   │   ├── model-00002-of-00002.safetensors
+│   │   ├── model.safetensors.index.json
+│   │   ├── preprocessor_config.json
+│   │   ├── processor_config.json
+│   │   ├── special_tokens_map.json
+│   │   ├── tokenizer.json
+│   │   ├── tokenizer.model
+│   │   └── tokenizer_config.json
+│   ├── medgemma-27b-gguf
+│   │   ├── .cache
+│   │   │   └── huggingface
+│   │   │       ├── CACHEDIR.TAG
+│   │   │       └── download
+│   │   │           ├── google_medgemma-27b-it-Q4_K_M.gguf.metadata
+│   │   │           ├── mmproj-google_medgemma-27b-it-bf16.gguf.metadata
+│   │   │           └── mmproj-google_medgemma-27b-it-f16.gguf.metadata
+│   │   ├── google_medgemma-27b-it-Q4_K_M.gguf
+│   │   ├── mmproj-google_medgemma-27b-it-bf16.gguf
+│   │   └── mmproj-google_medgemma-27b-it-f16.gguf
+│   ├── medgemma-27b-it
+│   │   ├── .cache
+│   │   │   └── huggingface
+│   │   │       ├── CACHEDIR.TAG
+│   │   │       └── download
+│   │   │           ├── .gitattributes.metadata
+│   │   │           ├── README.md.metadata
+│   │   │           ├── added_tokens.json.metadata
+│   │   │           ├── chat_template.jinja.metadata
+│   │   │           ├── config.json.metadata
+│   │   │           ├── generation_config.json.metadata
+│   │   │           ├── model-00001-of-00012.safetensors.metadata
+│   │   │           ├── model-00002-of-00012.safetensors.metadata
+│   │   │           ├── model-00003-of-00012.safetensors.metadata
+│   │   │           ├── model-00004-of-00012.safetensors.metadata
+│   │   │           ├── model-00005-of-00012.safetensors.metadata
+│   │   │           ├── model-00006-of-00012.safetensors.metadata
+│   │   │           ├── model-00007-of-00012.safetensors.metadata
+│   │   │           ├── model-00008-of-00012.safetensors.metadata
+│   │   │           ├── model-00009-of-00012.safetensors.metadata
+│   │   │           ├── model-00010-of-00012.safetensors.metadata
+│   │   │           ├── model-00011-of-00012.safetensors.metadata
+│   │   │           ├── model-00012-of-00012.safetensors.metadata
+│   │   │           ├── model.safetensors.index.json.metadata
+│   │   │           ├── preprocessor_config.json.metadata
+│   │   │           ├── processor_config.json.metadata
+│   │   │           ├── special_tokens_map.json.metadata
+│   │   │           ├── tokenizer.json.metadata
+│   │   │           ├── tokenizer.model.metadata
+│   │   │           └── tokenizer_config.json.metadata
+│   │   ├── README.md
+│   │   ├── added_tokens.json
+│   │   ├── chat_template.jinja
+│   │   ├── config.json
+│   │   ├── generation_config.json
+│   │   ├── model-00001-of-00012.safetensors
+│   │   ├── model-00002-of-00012.safetensors
+│   │   ├── model-00003-of-00012.safetensors
+│   │   ├── model-00004-of-00012.safetensors
+│   │   ├── model-00005-of-00012.safetensors
+│   │   ├── model-00006-of-00012.safetensors
+│   │   ├── model-00007-of-00012.safetensors
+│   │   ├── model-00008-of-00012.safetensors
+│   │   ├── model-00009-of-00012.safetensors
+│   │   ├── model-00010-of-00012.safetensors
+│   │   ├── model-00011-of-00012.safetensors
+│   │   ├── model-00012-of-00012.safetensors
+│   │   ├── model.safetensors.index.json
+│   │   ├── preprocessor_config.json
+│   │   ├── processor_config.json
+│   │   ├── special_tokens_map.json
+│   │   ├── tokenizer.json
+│   │   ├── tokenizer.model
+│   │   └── tokenizer_config.json
+│   ├── medgemma-4b-it
 │   │   ├── .cache
 │   │   │   └── huggingface
 │   │   │       ├── CACHEDIR.TAG
@@ -166,82 +554,131 @@
 │   │   ├── spiece.model
 │   │   ├── tokenizer.json
 │   │   └── tokenizer_config.json
-│   └── qwen2.5-7b-instruct
-│       ├── .cache
-│       │   └── huggingface
-│       │       ├── CACHEDIR.TAG
-│       │       └── download
-│       │           ├── .gitattributes.metadata
-│       │           ├── LICENSE.metadata
-│       │           ├── README.md.metadata
-│       │           ├── config.json.metadata
-│       │           ├── generation_config.json.metadata
-│       │           ├── merges.txt.metadata
-│       │           ├── model-00001-of-00004.safetensors.metadata
-│       │           ├── model-00002-of-00004.safetensors.metadata
-│       │           ├── model-00003-of-00004.safetensors.metadata
-│       │           ├── model-00004-of-00004.safetensors.metadata
-│       │           ├── model.safetensors.index.json.metadata
-│       │           ├── tokenizer.json.metadata
-│       │           ├── tokenizer_config.json.metadata
-│       │           └── vocab.json.metadata
-│       ├── LICENSE
-│       ├── README.md
-│       ├── config.json
-│       ├── generation_config.json
-│       ├── merges.txt
-│       ├── model-00001-of-00004.safetensors
-│       ├── model-00002-of-00004.safetensors
-│       ├── model-00003-of-00004.safetensors
-│       ├── model-00004-of-00004.safetensors
-│       ├── model.safetensors.index.json
-│       ├── tokenizer.json
-│       ├── tokenizer_config.json
-│       └── vocab.json
+│   ├── mirage
+│   │   ├── MIRAGE-Base
+│   │   │   ├── .cache
+│   │   │   │   └── huggingface
+│   │   │   │       ├── CACHEDIR.TAG
+│   │   │   │       └── download
+│   │   │   │           ├── .gitattributes.metadata
+│   │   │   │           ├── README.md.metadata
+│   │   │   │           ├── config.json.metadata
+│   │   │   │           └── model.safetensors.metadata
+│   │   │   ├── README.md
+│   │   │   ├── config.json
+│   │   │   └── model.safetensors
+│   │   ├── MIRAGE-Large
+│   │   │   ├── .cache
+│   │   │   │   └── huggingface
+│   │   │   │       ├── CACHEDIR.TAG
+│   │   │   │       └── download
+│   │   │   │           ├── .gitattributes.metadata
+│   │   │   │           ├── README.md.metadata
+│   │   │   │           ├── config.json.metadata
+│   │   │   │           └── model.safetensors.metadata
+│   │   │   ├── README.md
+│   │   │   ├── config.json
+│   │   │   └── model.safetensors
+│   │   └── mirage_hf.py
+│   ├── qwen2.5-7b-instruct
+│   │   ├── .cache
+│   │   │   └── huggingface
+│   │   │       ├── CACHEDIR.TAG
+│   │   │       └── download
+│   │   │           ├── .gitattributes.metadata
+│   │   │           ├── LICENSE.metadata
+│   │   │           ├── README.md.metadata
+│   │   │           ├── config.json.metadata
+│   │   │           ├── generation_config.json.metadata
+│   │   │           ├── merges.txt.metadata
+│   │   │           ├── model-00001-of-00004.safetensors.metadata
+│   │   │           ├── model-00002-of-00004.safetensors.metadata
+│   │   │           ├── model-00003-of-00004.safetensors.metadata
+│   │   │           ├── model-00004-of-00004.safetensors.metadata
+│   │   │           ├── model.safetensors.index.json.metadata
+│   │   │           ├── tokenizer.json.metadata
+│   │   │           ├── tokenizer_config.json.metadata
+│   │   │           └── vocab.json.metadata
+│   │   ├── LICENSE
+│   │   ├── README.md
+│   │   ├── config.json
+│   │   ├── generation_config.json
+│   │   ├── merges.txt
+│   │   ├── model-00001-of-00004.safetensors
+│   │   ├── model-00002-of-00004.safetensors
+│   │   ├── model-00003-of-00004.safetensors
+│   │   ├── model-00004-of-00004.safetensors
+│   │   ├── model.safetensors.index.json
+│   │   ├── tokenizer.json
+│   │   ├── tokenizer_config.json
+│   │   └── vocab.json
+│   ├── yolo12s_oct5k.pt
+│   └── yoloe_oct5k.pt
+├── offload_tmp
 ├── requirements.txt
 ├── scripts
 │   ├── build_metadata.py
 │   ├── create_csv_from_folders.py
-│   └── expand_prompts.py
+│   ├── expand_prompts.py
+│   └── make_splits_biomk.py
 ├── src
 │   ├── __init__.py
 │   ├── datasets
 │   │   ├── __init__.py
 │   │   ├── oct5k_medsiglip.py
-│   │   └── oct_dataset.py
+│   │   ├── oct_dataset.py
+│   │   └── test_crop.py
 │   ├── demo
 │   │   ├── __init__.py
 │   │   └── gradio_app.py
 │   ├── evaluation
 │   │   ├── __init__.py
 │   │   ├── evaluate.py
-│   │   └── tsne_viz.py
+│   │   ├── tsne_viz.py
+│   │   ├── yolo
+│   │   │   ├── __init__.py
+│   │   │   ├── predict_yolo_bbox.py
+│   │   │   └── yolo_vs_medsiglip.py
+│   │   └── zero_shot.py
 │   ├── explainability
 │   │   ├── __init__.py
 │   │   └── gradcam.py
 │   ├── losses
 │   │   ├── __init__.py
 │   │   └── siglip_loss.py
-│   ├── models
+│   ├── model
 │   │   ├── __init__.py
 │   │   ├── cnn_resnet18.py
 │   │   ├── image_encoder.py
+│   │   ├── medsiglip.py
 │   │   ├── siglip_model.py
 │   │   └── text_encoder.py
 │   ├── pipelines
 │   │   ├── __init__.py
+│   │   ├── gemini
+│   │   │   ├── __init__.py
+│   │   │   └── split_prompts_gemini.py
 │   │   ├── medgemma
 │   │   │   ├── __init__.py
-│   │   │   └── generate_prompts_medgemma.py
+│   │   │   ├── generate_prompts_medgemma.py
+│   │   │   └── severity_medgemma.py
 │   │   ├── medsiglip
 │   │   │   ├── __init__.py
-│   │   │   └── train_medsiglip.py
-│   │   └── qwen
+│   │   │   ├── linear_probing_cls.py
+│   │   │   ├── train_biomarker.py
+│   │   │   ├── train_medsiglip.py
+│   │   │   └── train_medsiglip_mirage.py
+│   │   ├── qwen
+│   │   │   ├── __init__.py
+│   │   │   ├── severity_qwen.py
+│   │   │   └── split_qwen.py
+│   │   └── yolo
 │   │       ├── __init__.py
-│   │       ├── severity_qwen.py
-│   │       └── split_qwen.py
+│   │       └── generate_bbox.py
 │   ├── retrieval
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   ├── retrieval_analysis.py
+│   │   └── retrieval_demo.py
 │   ├── training
 │   │   ├── __init__.py
 │   │   ├── train_cnn.py
@@ -249,8 +686,344 @@
 │   │   ├── train_siglip.py
 │   │   └── train_text_encoder_pretrain.py
 │   ├── uncertainty
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── mc_dropout.py
 │   └── utils
 │       ├── __init__.py
 │       └── seed.py
-└── structure.txt
+├── structure.txt
+└── wandb
+    ├── run-20260424_113203-cuqv6c4y
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-cuqv6c4y.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260429_123346-3zck8bll
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-3zck8bll.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260505_154425-nafmtyhm
+    │   ├── files
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   └── wandb-metadata.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-nafmtyhm.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260505_184318-8j95sxfn
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-8j95sxfn.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260522_151753-xpwnxl08
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-xpwnxl08.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260610_125037-82hpktu4
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-82hpktu4.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260611_020643-mclvqaev
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-mclvqaev.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260612_234921-afl6c5xi
+    │   ├── files
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   └── wandb-metadata.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-afl6c5xi.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260613_080800-2ayrjhac
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-2ayrjhac.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260613_174927-73pjbwzk
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-73pjbwzk.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_020932-rihspyed
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-rihspyed.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_112507-oeely3kr
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-oeely3kr.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_112701-4vauyr8e
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-4vauyr8e.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_114508-s9c7m9d6
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-s9c7m9d6.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_165448-64mkjjbb
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-64mkjjbb.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_171711-3c028gn0
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-3c028gn0.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_171743-fo43ysza
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-fo43ysza.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260614_222733-9vu1bkyw
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-9vu1bkyw.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260615_230153-myr2q6ui
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-myr2q6ui.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260615_231026-dgkikkkd
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-dgkikkkd.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260615_232017-yq2amxz6
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-yq2amxz6.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260616_131402-tmxy9b8e
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-tmxy9b8e.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260616_131605-6mcjzgoy
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-6mcjzgoy.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260616_133738-grvia95m
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-grvia95m.wandb
+    │   └── tmp
+    │       └── code
+    ├── run-20260616_173824-20xy1ld5
+    │   ├── files
+    │   │   ├── config.yaml
+    │   │   ├── output.log
+    │   │   ├── requirements.txt
+    │   │   ├── wandb-metadata.json
+    │   │   └── wandb-summary.json
+    │   ├── logs
+    │   │   ├── debug-internal.log
+    │   │   └── debug.log
+    │   ├── run-20xy1ld5.wandb
+    │   └── tmp
+    │       └── code
+    └── run-20260616_174136-pczpbm4q
+        ├── files
+        │   ├── config.yaml
+        │   ├── output.log
+        │   ├── requirements.txt
+        │   ├── wandb-metadata.json
+        │   └── wandb-summary.json
+        ├── logs
+        │   ├── debug-internal.log
+        │   └── debug.log
+        ├── run-pczpbm4q.wandb
+        └── tmp
+            └── code

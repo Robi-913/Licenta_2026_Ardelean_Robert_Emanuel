@@ -1,0 +1,98 @@
+[transformers] Model config: bos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49406. This may result in unexpected behavior.
+[transformers] Model config: eos_token_id must be `None` or an integer within the vocabulary (between 0 and 31999), got 49407. This may result in unexpected behavior.
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+  Train: 2978 imagini (1447 cu bbox, weight=3.0x)
+OCT5k [train]: 2978 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 863 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+OCT5k [eval]: 748 images, 4 classes: ['AMD', 'DME', 'DRUSEN', 'NORMAL']
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights: 100%|█████████████████████████████████████████████████████████████| 888/888 [00:00<00:00, 5502.04it/s]
+C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py:1369: UserWarning: expandable_segments not supported on this platform (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\c10/cuda/CUDAAllocatorConfig.h:40.)
+  return t.to(
+  Resumed from epoch 11, best: 80.8
+Epoch 12/35: 100%|████████████████████████████| 372/372 [1:12:08<00:00, 11.63s/it, C=0.199, CL=0.009, L=0.404, S=0.017]
+Epoch 13/35:  11%|███▎                         | 42/372 [09:36<1:15:28, 13.72s/it, C=0.189, CL=0.005, L=0.383, S=0.019]
+
+Epoch 12: Loss T=0.404 V=1.404 [C=0.199 S=0.017 CL=0.009]
+  R@1=78.6% | Cls=74.7% | SevMAE=28.0% | Score=76.0
+  (4/10)
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 639, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 575, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 256, in run_train
+    loss, loss_c, loss_s, loss_cl, img_emb, fused_emb, _, _ = compute_loss(
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 212, in compute_loss
+    img_emb, emb_a, emb_b, fused_emb, logit_scale, sev_pred, cls_logits = model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 275, in forward
+    emb_structural   = self.encode_text(input_ids_a, attention_mask_a)   # [B, dim]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 170, in encode_text
+    self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 907, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 700, in get_text_features
+    return self.text_model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 1036, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\output_capturing.py", line 252, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 527, in forward
+    attention_mask = create_bidirectional_mask(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 1099, in create_bidirectional_mask
+    attention_mask = mask_interface(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 614, in eager_mask
+    mask = sdpa_mask(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 523, in sdpa_mask
+    if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(padding_mask, kv_length, local_size):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 357, in _ignore_bidirectional_mask_sdpa
+    and (local_attention_size is None or kv_length < local_attention_size)
+KeyboardInterrupt
+Traceback (most recent call last):
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 639, in <module>
+    main()
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 575, in main
+    train_m = run_train(model, train_loader, contrastive_fn, cls_fn, sev_fn, optimizer, scaler, epoch)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 256, in run_train
+    loss, loss_c, loss_s, loss_cl, img_emb, fused_emb, _, _ = compute_loss(
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\pipelines\medsiglip\train_medsiglip.py", line 212, in compute_loss
+    img_emb, emb_a, emb_b, fused_emb, logit_scale, sev_pred, cls_logits = model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 275, in forward
+    emb_structural   = self.encode_text(input_ids_a, attention_mask_a)   # [B, dim]
+  File "D:\Licenta Ardelean Robert\Licenta_2026_Ardelean_Robert_Emanuel\src\model\medsiglip.py", line 170, in encode_text
+    self.backbone.get_text_features(input_ids=input_ids, attention_mask=attention_mask)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 907, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 700, in get_text_features
+    return self.text_model(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\torch\nn\modules\module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\generic.py", line 1036, in wrapper
+    output = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\utils\output_capturing.py", line 252, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\models\siglip\modeling_siglip.py", line 527, in forward
+    attention_mask = create_bidirectional_mask(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 1099, in create_bidirectional_mask
+    attention_mask = mask_interface(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 614, in eager_mask
+    mask = sdpa_mask(
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 523, in sdpa_mask
+    if allow_is_bidirectional_skip and _ignore_bidirectional_mask_sdpa(padding_mask, kv_length, local_size):
+  File "C:\Users\admdev\miniconda3\envs\Robert\lib\site-packages\transformers\masking_utils.py", line 357, in _ignore_bidirectional_mask_sdpa
+    and (local_attention_size is None or kv_length < local_attention_size)
+KeyboardInterrupt

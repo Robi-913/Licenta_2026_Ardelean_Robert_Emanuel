@@ -1,3 +1,12 @@
+"""
+[ARCHIVED / TESTED - NOT MOVING FORWARD]
+
+Acesta este un script vechi, pastrat ca dovada (proof of concept) ca s-a incercat
+si varianta de a calcula scorul de severitate direct din text folosind Qwen2.5-7B-Instruct.
+A fost inlocuit in pipeline-ul principal de abordarea determinista cu MedGemma (Severity Scoring v2).
+NU este folosit mai departe in logica de business.
+"""
+
 import json
 import random
 import re
@@ -8,14 +17,15 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-
-# ---------- config ----------
+# CONFIGURARI
 
 class Config:
-    model_path = "models/qwen2.5-7b-instruct"
+    # Setarile pentru modelul Qwen folosit ca test local
+    model_path = "model/qwen2.5-7b-instruct"
     src_json = "data/oct5k/medgemma_prompts.json"
     out_json = "data/oct5k/severity_scores.json"
 
+    # Parametrii pentru generare
     max_tokens = 250
     retries = 2
 
@@ -23,29 +33,31 @@ class Config:
     resume = True
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # Marjele hardcodate pentru ochii sanatosi (fara boala)
     normal_min = 0
     normal_max = 10
 
 
 cfg = Config()
 
-
-# ---------- model ----------
+# INCARCARE MODEL
 
 def load_model():
     print(f"\n  Model: {cfg.model_path}")
+    # Incarcam tokenizer-ul si modelul efectiv
     tok = AutoTokenizer.from_pretrained(cfg.model_path)
     mdl = AutoModelForCausalLM.from_pretrained(
         cfg.model_path,
-        dtype=torch.bfloat16,
-        device_map="auto",
+        dtype=torch.bfloat16,  # Folosim bfloat16 pentru a eficientiza consumul de memorie video
+        device_map="auto",  # Lasa biblioteca sa imparta automat modelul pe GPU/CPU
     )
-    mdl.eval()
+    mdl.eval()  # Oprim antrenarea (mod inferenta)
+
     print(f"  VRAM: {torch.cuda.memory_allocated() / 1024 ** 3:.1f} GB")
     return mdl, tok
 
 
-# ---------- system prompt ----------
+# PROMPT-UL SISTEMULUI (Regulile pentru Qwen)
 
 SYS_PROMPT = (
     "You are a retinal disease severity estimator for OCT scans.\n"
@@ -70,11 +82,10 @@ SYS_PROMPT = (
     "Severity: <number>%"
 )
 
-
-# ---------- generation ----------
-
+# GENERARE SI PARSARE
 @torch.no_grad()
 def call_model(mdl, tok, description, extra=""):
+    # Formateaza mesajul userului incluzand descrierea OCT si formatul strict
     user_msg = (
         f"Analyze the severity of this OCT scan description:\n\n"
         f"{description}\n\n"
@@ -85,6 +96,7 @@ def call_model(mdl, tok, description, extra=""):
         f"{extra}"
     )
 
+    # Impachetam in template-ul oficial de chat (system msg + user msg)
     msgs = [
         {"role": "system", "content": SYS_PROMPT},
         {"role": "user", "content": user_msg},
@@ -94,6 +106,7 @@ def call_model(mdl, tok, description, extra=""):
     inputs = tok(text, return_tensors="pt").to(mdl.device)
     prefix = inputs["input_ids"].shape[1]
 
+    # Generam raspunsul modelului
     out = mdl.generate(
         **inputs,
         max_new_tokens=cfg.max_tokens,
@@ -102,12 +115,12 @@ def call_model(mdl, tok, description, extra=""):
         pad_token_id=tok.eos_token_id,
     )
 
+    # Taiem promptul original din raspuns si il returnam curat
     return tok.decode(out[0][prefix:], skip_special_tokens=True).strip()
 
 
-# ---------- parsing ----------
-
 def parse(response):
+    # Functie care cauta cuvintele cheie in raspunsul lui Qwen
     sev = None
     level = None
     reason = None
@@ -116,14 +129,17 @@ def parse(response):
         line = line.strip()
         low = line.lower()
 
+        # Extragem severitatea (numarul in sine)
         if low.startswith("severity:"):
             m = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
             if m:
                 sev = max(0, min(100, float(m.group(1))))
 
+        # Extragem categoria textuala (ex: Mild, Severe)
         elif low.startswith("level:"):
             level = line.split(":", 1)[1].strip()
 
+        # Extragem rationamentul text
         elif low.startswith("reasoning:"):
             reason = line.split(":", 1)[1].strip()
 
@@ -133,6 +149,7 @@ def parse(response):
 def score_one(mdl, tok, description):
     last_raw = None
 
+    # Mecanism de retry in caz ca modelul nu respecta formatul din prima
     for t in range(cfg.retries + 1):
         hint = ""
         if t > 0:
@@ -141,25 +158,27 @@ def score_one(mdl, tok, description):
         raw = call_model(mdl, tok, description, extra=hint)
         last_raw = raw
 
+        # Incercam sa parsam. Daca avem severitatea, am reusit.
         sev, level, reason = parse(raw)
         if sev is not None:
             return sev, level or "Unknown", reason or "", True, []
 
+    # Daca a esuat de toate datile, intoarcem eroare
     return None, None, last_raw, False, ["parse_failed"]
 
-
-# ---------- save ----------
-
+# FUNCTII DE SALVARE
 def save_out(data):
+    # Salveaza progresul pe disc sub forma de fisier JSON
     out = Path(cfg.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-# ---------- main loop ----------
+# BUCLA PRINCIPALA DE RULARE
 
 def run_all(mdl, tok, data):
+    # Logica de resume pt a nu re-procesa imagini deja calculate
     prev = {}
     if cfg.resume and Path(cfg.out_json).exists():
         with open(cfg.out_json, "r", encoding="utf-8") as f:
@@ -182,6 +201,8 @@ def run_all(mdl, tok, data):
         if not desc or desc.startswith("ERROR"):
             continue
 
+        # Daca poza e sanatoasa (NORMAL), nu mai deranjam reteaua neuronala;
+        # hardcodam direct un scor foarte mic pt a economisi zeci de minute de GPU
         if disease.upper() == "NORMAL":
             sev = round(random.uniform(cfg.normal_min, cfg.normal_max), 1)
             results.append({
@@ -195,6 +216,7 @@ def run_all(mdl, tok, data):
             })
             continue
 
+        # Pentru cele cu boli, cerem scorul de la Qwen
         try:
             sev, level, reason, ok, issues = score_one(mdl, tok, desc)
         except Exception as e:
@@ -202,6 +224,7 @@ def run_all(mdl, tok, data):
             sev, level, reason = None, None, str(e)
             ok, issues = False, [f"exception:{e}"]
 
+        # Adaugam rezultatul in lista
         results.append({
             "image_path": path,
             "disease_category": disease,
@@ -213,39 +236,45 @@ def run_all(mdl, tok, data):
         })
         done += 1
 
+        # Salvam la fiecare X pasi pt siguranta
         if done % cfg.save_interval == 0:
             save_out(results)
             tqdm.write(f"  Saved {len(results)} | Done: {done} | Errors: {n_err}")
 
+    # Salvarea finala in afara buclei
     save_out(results)
     return results, n_err
 
-
-# ---------- main ----------
+# MAIN
 
 def main():
     random.seed(42)
 
     print("=" * 70)
-    print("  STEP 3: SEVERITY SCORING WITH QWEN2.5-7B-INSTRUCT (LOCAL)")
+    print("  [ARCHIVED] STEP 3: SEVERITY SCORING WITH QWEN2.5-7B-INSTRUCT")
     print("=" * 70)
 
+    # Incarcam setul de date cu prompturile de la MedGemma
     with open(cfg.src_json, "r", encoding="utf-8") as f:
         raw = json.load(f)
 
+    # Filtram pozele cu probleme
     usable = [p for p in raw if not p["generated_prompt"].startswith("ERROR")]
     print(f"  Total images: {len(raw)}")
     print(f"  Usable: {len(usable)}")
 
+    # Calculam o mica estimare de timp
     n_normal = sum(1 for p in usable if p["disease_category"].upper() == "NORMAL")
     n_disease = len(usable) - n_normal
     print(f"  NORMAL (hardcoded 0-10%): {n_normal}")
     print(f"  Disease (Qwen inference): {n_disease}")
     print(f"  Estimated time: ~{n_disease // 60} min on RTX 3090")
 
+    # Lansam executia
     mdl, tok = load_model()
     results, n_err = run_all(mdl, tok, usable)
 
+    # Calculam si printam rezultatele finale in consola
     good = [r for r in results if r.get("severity_valid") is True]
     lvls = [r["severity_level"] for r in good if r.get("severity_level")]
     lvl_dist = dict(sorted(Counter(lvls).items()))
@@ -257,10 +286,12 @@ def main():
     print(f"  Errors: {n_err}")
     print(f"  Level distribution: {lvl_dist}")
 
+    # Facem statistica per boala
     for cat in ["NORMAL", "DRUSEN", "AMD", "DME"]:
         subset = [r for r in good if r["disease_category"].upper() == cat]
         if not subset:
             continue
+
         sevs = [r["severity_percent"] for r in subset if r["severity_percent"] is not None]
         if sevs:
             avg = sum(sevs) / len(sevs)

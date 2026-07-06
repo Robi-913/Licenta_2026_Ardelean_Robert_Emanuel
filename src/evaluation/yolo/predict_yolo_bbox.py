@@ -5,10 +5,10 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# ================================================================
+
 # CONFIGURARE DEFAULT
-# ================================================================
-DEFAULT_MODEL_PATH = "models/yolo12s_oct5k.pt"
+
+DEFAULT_MODEL_PATH = "model/yolo12s_oct5k.pt"
 DEFAULT_OUT_DIR = "experiments/yolo_predictions"
 CONF_THRESH = 0.25
 IOU_THRESH = 0.45
@@ -105,9 +105,7 @@ def main():
             legend_text = f"{cls_name}: {conf * 100:.1f}%"
             legend_entries.append((legend_text, color))
 
-        # ==========================================
         # CREARE LEGENDA IN COLTUL DREAPTA-SUS
-        # ==========================================
         margin = 15
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.6
