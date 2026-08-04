@@ -1,19 +1,3 @@
-"""
-train_biomarker_v5.py — Biomarker Heads v5
-Doctor-only labels + backbone LoRA frozen din v13
-
-Schimbari fata de v4:
-  - Backbone din v13 (cu LoRA) in loc de v7 (fara LoRA)
-  - Doctor-only (fara YOLO silver labels) — ground truth curat
-  - splits_v3 (patient-grouped, fara leakage)
-  - Backbone complet inghetat (inclusiv LoRA) — antreneaza doar heads
-  - Scos sample weights (nu mai e nevoie, nu mai e YOLO)
-
-Arhitectura:
-    OCT -> MedSigLIPMultiTask (frozen, din v13) -> emb (1152) -> 9 heads (trainable)
-
-"""
-
 import gc
 import json
 import os
@@ -38,10 +22,6 @@ from src.model.medsiglip import MedSigLIPMultiTask, BiomarkerHeadsV5
 from src.utils.seed import set_seed
 
 
-
-# CONFIGURARE
-
-
 class Config:
     ms_ckpt = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
     model_path = "models/medsiglip-448"
@@ -49,14 +29,14 @@ class Config:
     master_json = "data/oct5k/metadata_v2/_master.json"
     save_dir = "experiments/biomarker_heads_v5"
 
-    # LoRA config — IDENTIC cu v13, altfel load_state_dict da eroare
+    # LoRA config — IDENTIC cu v15, altfel load_state_dict da eroare
     lora_rank = 16
     lora_alpha = 32
     lora_dropout = 0.05
 
     batch_size = 16
     epochs = 100
-    lr_heads = 5e-4   # doar head-urile se antreneaza, backbone frozen
+    lr_heads = 5e-4  # doar head-urile se antreneaza, backbone frozen
     wd = 0.01
     grad_clip = 1.0
     patience = 20
@@ -77,9 +57,6 @@ class Config:
 cfg = Config()
 os.makedirs(cfg.ckpt_dir, exist_ok=True)
 
-
-# BIOMARKERI
-
 BIOMARKERS = [
     "Fluid", "Geographicatrophy", "PRlayerdisruption", "SoftdrusenPED",
     "Reticulardrusen", "Hyperfluorescentspots", "Softdrusen", "Harddrusen", "Choroidalfolds",
@@ -90,17 +67,17 @@ BM2IDX = {bm: i for i, bm in enumerate(BIOMARKERS)}
 # Normalizam numele biomarkerilor pt matching robust (spatii, underscore, case)
 _BM_NORMALIZED = {bm.lower().replace(" ", "").replace("_", ""): bm for bm in BIOMARKERS}
 
+
 def _normalize(name: str) -> str:
     return name.lower().replace(" ", "").replace("_", "")
 
-
-# LOCALIZARE IMAGINI
 
 _IMG_SEARCH_DIRS = [
     "data/OCT5k/Images/Images_Automatic",
     "data/OCT5k/Images/Images_Manual",
     "data/OCT5k/Detection/Images",
 ]
+
 
 def locate_image(meta: dict) -> str | None:
     """
@@ -124,12 +101,10 @@ def locate_image(meta: dict) -> str | None:
             if with_ext.exists():
                 return str(with_ext)
 
-    return None  # nu am gasit nimic
+    return None
 
 
-# DATASET — Doctor-only
-
-class BiomarkerDatasetV5(Dataset):
+class BiomarkerDataset(Dataset):
     """
     Dataset cu imagini adnotate doar de doctor (bbox_source == 'doctor').
     YOLO silver labels excluse — ground truth curat.
@@ -144,7 +119,7 @@ class BiomarkerDatasetV5(Dataset):
         self.mode = mode
         self.samples = self._build_samples(image_paths, metadata_dict)
 
-        print(f"  BiomarkerDatasetV5 [{mode}]: {len(self.samples)} imagini (doctor-only)")
+        print(f"  BiomarkerDataset [{mode}]: {len(self.samples)} imagini (doctor-only)")
         self._print_label_distribution()
 
     def _build_samples(self, image_paths: list, metadata_dict: dict) -> list:
@@ -222,8 +197,6 @@ def collate_bm(batch: list) -> dict:
     }
 
 
-# FOCAL LOSS
-
 class FocalLoss(nn.Module):
     """
     Focal Loss pentru clasificare binara multi-label.
@@ -265,8 +238,6 @@ class FocalLoss(nn.Module):
 
         return (alpha_t * focal_weight * bce).mean()
 
-
-# UTILITARE — class weights, threshold optimization
 
 def compute_pos_weights(samples: list) -> torch.Tensor:
     """
@@ -328,9 +299,9 @@ def optimize_thresholds(model: BiomarkerHeadsV5, loader: DataLoader) -> list[flo
 
 @torch.no_grad()
 def evaluate(
-    model: BiomarkerHeadsV5,
-    loader: DataLoader,
-    thresholds: list[float] | None = None,
+        model: BiomarkerHeadsV5,
+        loader: DataLoader,
+        thresholds: list[float] | None = None,
 ) -> dict:
     """
     Evalueaza modelul si returneaza F1, Precision, Recall per biomarker + Macro F1.
@@ -361,10 +332,10 @@ def evaluate(
 
         preds = (probs[:, i] > thresholds[i]).astype(float)
         results[bm] = {
-            "f1":        round(float(f1_score(labels[:, i], preds, zero_division=0)), 4),
+            "f1": round(float(f1_score(labels[:, i], preds, zero_division=0)), 4),
             "precision": round(float(precision_score(labels[:, i], preds, zero_division=0)), 4),
-            "recall":    round(float(recall_score(labels[:, i], preds, zero_division=0)), 4),
-            "n_pos":     n_pos,
+            "recall": round(float(recall_score(labels[:, i], preds, zero_division=0)), 4),
+            "n_pos": n_pos,
         }
         f1_scores.append(results[bm]["f1"])
 
@@ -377,17 +348,16 @@ def _free_mem() -> None:
         torch.cuda.empty_cache()
     gc.collect()
 
-# INCARCARE BACKBONE DIN CHECKPOINT v13
 
-def load_backbone_from_v13(ckpt_path: str) -> MedSigLIPMultiTask:
+def load_backbone_from_v15(ckpt_path: str) -> MedSigLIPMultiTask:
     """
-    Incarca backbone-ul MedSigLIPMultiTask din checkpointul v13.
+    Incarca backbone-ul MedSigLIPMultiTask din checkpointul v15.
     Filtram doar cheile care incep cu 'backbone.' si le incarcam strict.
     Restul (heads, fusion, logit_scale) nu ne intereseaza — vor fi ignorati.
     """
     print(f"\n  Loading backbone + LoRA from {ckpt_path}...")
 
-    # Cream modelul cu aceiasi parametri LoRA ca v13 — altfel cheile nu se potrivesc
+    # Cream modelul cu aceiasi parametri LoRA ca v15 — altfel cheile nu se potrivesc
     model = MedSigLIPMultiTask(
         cfg.model_path,
         lora_rank=cfg.lora_rank,
@@ -409,17 +379,14 @@ def load_backbone_from_v13(ckpt_path: str) -> MedSigLIPMultiTask:
     }
     model.backbone.load_state_dict(backbone_state, strict=True)
 
-
     print("  Backbone + LoRA incarcate cu succes!")
 
     return model
 
-# MAIN
+
 def main():
-    print("=" * 60)
     print("  BIOMARKER HEADS v5 — Doctor-only + LoRA backbone v13")
     print(f"  Epochs: {cfg.epochs} | LR heads: {cfg.lr_heads}")
-    print("=" * 60)
 
     set_seed()
 
@@ -438,8 +405,8 @@ def main():
     train_paths = train_csv[train_csv["has_bbox"] == True]["image_path"].tolist()
     val_paths = val_csv[val_csv["has_bbox"] == True]["image_path"].tolist()
 
-    train_ds = BiomarkerDatasetV5(train_paths, metadata_dict, processor, mode="train")
-    val_ds = BiomarkerDatasetV5(val_paths,   metadata_dict, processor, mode="eval")
+    train_ds = BiomarkerDataset(train_paths, metadata_dict, processor, mode="train")
+    val_ds = BiomarkerDataset(val_paths, metadata_dict, processor, mode="eval")
 
     if not train_ds.samples:
         raise RuntimeError("Nu s-au gasit imagini doctor cu bbox in train split!")
@@ -461,8 +428,8 @@ def main():
         pos_weight=pos_weights.to(cfg.device),
     )
 
-    # Incarcam backbone-ul din v13 si construim modelul de biomarkeri
-    base_model = load_backbone_from_v13(cfg.backbone_ckpt)
+    # Incarcam backbone-ul din v15 si construim modelul de biomarkeri
+    base_model = load_backbone_from_v15(cfg.backbone_ckpt)
     model = BiomarkerHeadsV5(backbone=base_model, n_biomarkers=N_BM).to(cfg.device)
 
     # Optimizam DOAR head-urile — backbone frozen din BiomarkerHeadsV5.__init__
@@ -514,7 +481,7 @@ def main():
         else:
             wait += 1
 
-        marker = f"  ★ Best: {best_f1:.4f}" if improved else f"  ({wait}/{cfg.patience})"
+        marker = f"  Best: {best_f1:.4f}" if improved else f"  ({wait}/{cfg.patience})"
         print(f"  Epoch {epoch + 1}: Loss={tot_loss / steps:.4f} | Macro F1={macro_f1:.4f}{marker}")
 
         if wait >= cfg.patience:
@@ -523,10 +490,6 @@ def main():
 
         _free_mem()
 
-    
-    # THRESHOLD OPTIMIZATION PE BEST CHECKPOINT
-    
-    print(f"\n{'=' * 60}")
     print("  THRESHOLD OPTIMIZATION pe best checkpoint...")
 
     best_ckpt = torch.load(f"{cfg.ckpt_dir}/best.pth", map_location="cpu", weights_only=False)
@@ -545,21 +508,19 @@ def main():
 
     # Salvam checkpoint final cu threshold-urile optime incluse
     torch.save({
-        "epoch":        best_ckpt["epoch"],
-        "model":        model.state_dict(),
-        "best_f1":      best_f1,
-        "best_f1_opt":  metrics_opt["macro_f1"],
-        "thresholds":   thresholds,
-        "metrics":      metrics_opt,
-        "biomarkers":   BIOMARKERS,
-        "version":      "v5",
+        "epoch": best_ckpt["epoch"],
+        "model": model.state_dict(),
+        "best_f1": best_f1,
+        "best_f1_opt": metrics_opt["macro_f1"],
+        "thresholds": thresholds,
+        "metrics": metrics_opt,
+        "biomarkers": BIOMARKERS,
+        "version": "v5",
     }, f"{cfg.ckpt_dir}/best.pth")
 
-    print(f"\n{'=' * 60}")
     print(f"  DONE! Macro F1 = {metrics_opt['macro_f1']:.4f}")
     print(f"  Thresholds: {thresholds}")
     print(f"  Saved: {cfg.ckpt_dir}/best.pth")
-    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

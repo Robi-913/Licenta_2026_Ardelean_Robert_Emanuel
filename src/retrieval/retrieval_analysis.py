@@ -1,34 +1,19 @@
-"""
-Retrieval Analysis Detaliata - MedSigLIP v13
-
-Pe test set:
-  1. R@1, R@2, R@3 per boala
-  2. Confusion matrix retrieval
-  3. Failure analysis
-
-Rulare:
-    python -m src.evaluation.retrieval_analysis
-"""
-
+import gc
 import json
 import os
 import sys
-import gc
 from collections import defaultdict
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoModel, AutoProcessor
+from transformers import AutoProcessor
 from peft import LoraConfig, get_peft_model
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -38,29 +23,29 @@ from src.model.medsiglip import MedSigLIPMultiTask
 from src.utils.seed import set_seed
 
 
-
 # CONFIG
 
 
 class Config:
-    model_path  = "models/medsiglip-448"
-    ckpt_path   = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
+    model_path = "models/medsiglip-448"
+    ckpt_path = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
 
-    splits_dir  = "data/oct5k/splits_v3"
-    split_json  = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
-    sev_json    = "data/oct5k/severity_scores_v2.json"
+    splits_dir = "data/oct5k/splits_v3"
+    split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
+    sev_json = "data/oct5k/severity_scores_v2.json"
 
-    out_json    = "experiments/retrieval_analysis_v13.json"
-    fig_dir     = "experiments/figures/retrieval_analysis_v13"
+    out_json = "experiments/retrieval_analysis_v13.json"
+    fig_dir = "experiments/figures/retrieval_analysis_v13"
 
-    bs      = 8
+    bs = 8
     workers = 0
-    device  = "cuda" if torch.cuda.is_available() else "cpu"
-    amp     = torch.cuda.is_available()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    amp = torch.cuda.is_available()
 
 
 cfg = Config()
 os.makedirs(cfg.fig_dir, exist_ok=True)
+
 
 # EXTRACT EMBEDDINGS
 
@@ -68,6 +53,7 @@ def clear_mem():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
+
 
 def _detect_cls_head(state_dict):
     for k, v in state_dict.items():
@@ -100,7 +86,7 @@ def extract_all(model, loader, dataset):
         all_lbl.append(batch["label"])
 
         start = batch_idx * cfg.bs
-        end   = min(start + cfg.bs, len(dataset))
+        end = min(start + cfg.bs, len(dataset))
         for i in range(end - start):
             row = dataset.df.iloc[start + i]
             all_paths.append(row["image_path"])
@@ -182,7 +168,6 @@ def compute_retrieval_per_disease(img_emb, txt_emb, labels, diseases, classes):
     return results, i2t_top, t2i_top
 
 
-
 # CONFUSION MATRIX RETRIEVAL
 
 
@@ -195,7 +180,6 @@ def compute_retrieval_confusion(i2t_top, labels, classes):
         retrieved_cls = labels[i2t_top[i, 0]].item()
         cm[true_cls, retrieved_cls] += 1
     return cm
-
 
 
 # FAILURE ANALYSIS
@@ -221,12 +205,14 @@ def analyze_failures(i2t_top, labels, diseases, paths, classes):
             retrieved_cls = classes[top_labels[0]]
             info = {"index": i, "true_class": cls_name, "retrieved_class": retrieved_cls,
                     "path": paths[i], "top3_classes": [classes[c] for c in top_labels[:3]]}
-            if r2_hit: failures["r1_miss_r2_hit"].append(info)
-            elif r3_hit: failures["r1_miss_r3_hit"].append(info)
-            else: failures["r1_r2_r3_miss"].append(info)
+            if r2_hit:
+                failures["r1_miss_r2_hit"].append(info)
+            elif r3_hit:
+                failures["r1_miss_r3_hit"].append(info)
+            else:
+                failures["r1_r2_r3_miss"].append(info)
 
     return failures, per_class_stats
-
 
 
 # PLOTS
@@ -264,10 +250,12 @@ def plot_confusion_matrix(cm, classes):
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes, ax=axes[0])
     axes[0].set_title("Retrieval Confusion (counts)", fontsize=13)
-    axes[0].set_ylabel("True Class"); axes[0].set_xlabel("Retrieved Class")
+    axes[0].set_ylabel("True Class");
+    axes[0].set_xlabel("Retrieved Class")
     sns.heatmap(cm_norm, annot=True, fmt=".1f", cmap="Reds", xticklabels=classes, yticklabels=classes, ax=axes[1])
     axes[1].set_title("Retrieval Confusion (%)", fontsize=13)
-    axes[1].set_ylabel("True Class"); axes[1].set_xlabel("Retrieved Class")
+    axes[1].set_ylabel("True Class");
+    axes[1].set_xlabel("Retrieved Class")
     plt.suptitle("MedSigLIP v13 - Retrieval Confusion (I2T top-1)", fontsize=14)
     plt.tight_layout()
     plt.savefig(f"{cfg.fig_dir}/retrieval_confusion.png", dpi=200)
@@ -309,17 +297,14 @@ def plot_failure_breakdown(per_class_stats, classes):
     print(f"  Saved: {cfg.fig_dir}/failure_breakdown.png")
 
 
-
 # MAIN
 
 
 def main():
     set_seed()
 
-    print("=" * 70)
     print("  RETRIEVAL ANALYSIS - MedSigLIP v13")
     print("  R@1, R@2, R@3 per boala | Confusion | Failure analysis")
-    print("=" * 70)
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
@@ -368,7 +353,7 @@ def main():
         data["img_emb"], data["txt_emb"], data["labels"], data["diseases"], classes)
 
     print(f"\n  {'':>15} {'Avg R@1':>8} {'Avg R@2':>8} {'Avg R@3':>8} {'I2T R@1':>8} {'T2I R@1':>8} {'Count':>6}")
-    print(f"  {'-'*62}")
+    print(f"  {'-' * 62}")
     for cls_name in classes:
         r = ret_results["per_class"].get(cls_name, {})
         print(f"  {cls_name:>15} {r.get('Avg_R@1', 0):>7.1f}% {r.get('Avg_R@2', 0):>7.1f}% "
@@ -397,7 +382,7 @@ def main():
     n_r1_miss = len(failures["r1_miss_r2_hit"]) + len(failures["r1_miss_r3_hit"]) + len(failures["r1_r2_r3_miss"])
     n_r2_recovery = len(failures["r1_miss_r2_hit"])
     n_r3_recovery = len(failures["r1_miss_r3_hit"])
-    n_total_miss  = len(failures["r1_r2_r3_miss"])
+    n_total_miss = len(failures["r1_r2_r3_miss"])
 
     print(f"\n  Failure Breakdown ({n_total} imagini):")
     print(f"    R@1 correct:           {n_total - n_r1_miss:>5} ({(n_total - n_r1_miss) / n_total * 100:.1f}%)")
@@ -407,12 +392,13 @@ def main():
 
     print(f"\n  Per class:")
     print(f"  {'Class':<12} {'Total':>6} {'R@1':>8} {'R@2':>8} {'R@3':>8}")
-    print(f"  {'-'*42}")
+    print(f"  {'-' * 42}")
     for cls in classes:
         s = per_class_stats[cls]
         t = s["total"]
         if t == 0: continue
-        print(f"  {cls:<12} {t:>6} {s['r1_hit']/t*100:>7.1f}% {s['r2_hit']/t*100:>7.1f}% {s['r3_hit']/t*100:>7.1f}%")
+        print(
+            f"  {cls:<12} {t:>6} {s['r1_hit'] / t * 100:>7.1f}% {s['r2_hit'] / t * 100:>7.1f}% {s['r3_hit'] / t * 100:>7.1f}%")
 
     confusion_pairs = defaultdict(int)
     for category in failures.values():

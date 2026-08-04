@@ -1,15 +1,4 @@
-"""
-Step 3: Split MedGemma prompts in prompt_a (structura) si prompt_b (patologie)
-
-Folosim Gemini 3.1 Flash-Lite pentru a imparti textele generate anterior.
-Am pastrat doar logica de impartire si am scos partea de urmarire a costurilor.
-
-Rulare:
-    python -m src.pipelines.medgemma.split_prompts_gemini
-"""
-
 import json
-import os
 import time
 from pathlib import Path
 
@@ -23,31 +12,27 @@ from src.utils.seed import set_seed
 # CONFIGURARI
 
 class Config:
-    api_key        = "API_KEY"
-    model          = "gemini-3.1-flash-lite"
+    api_key = "API_KEY"
+    model = "gemini-3.1-flash-lite"
 
-    # Fisierele de intrare si iesire
-    input_json     = "data/OCT5k/medgemma_prompts_v2_27b.json"
-    output_json    = "data/oct5k/medgemma_prompts_split_v2_27b.json"
+    input_json = "data/OCT5k/medgemma_prompts_v2_27b.json"
+    output_json = "data/oct5k/medgemma_prompts_split_v2_27b.json"
 
-    # Setari pentru bucla de procesare
-    save_interval  = 100   # Salvam progresul la fiecare 100 de imagini
-    resume         = True  # Daca se opreste scriptul, continuam de unde a ramas
-    max_retries    = 2     # Cate incercari dam daca pica API-ul
-    sleep_on_error = 2.0   # Cate secunde asteptam in caz de eroare inainte de retry
+    save_interval = 100  # Salvam progresul la fiecare 100 de imagini
+    resume = True  # Daca se opreste scriptul, continuam de unde a ramas
+    max_retries = 2  # Cate incercari dam daca pica API-ul
+    sleep_on_error = 2.0  # Cate secunde asteptam in caz de eroare inainte de retry
+
 
 cfg = Config()
 
 # Dictionar care mapeaza prescurtarile bolilor pe numele lor intreg, medical
 DISEASE_FULL = {
-    "AMD":    "Age-Related Macular Degeneration",
-    "DME":    "Diabetic Macular Edema",
+    "AMD": "Age-Related Macular Degeneration",
+    "DME": "Diabetic Macular Edema",
     "DRUSEN": "Drusen",
     "NORMAL": "Normal healthy retina",
 }
-
-
-# PROMPT-UL PENTRU GEMINI
 
 # Instructiunile clare pentru a imparti textul generat in partea de Structura si partea de Patologie
 SPLIT_PROMPT = """Split this OCT description into exactly two parts. Each part MUST:
@@ -69,8 +54,6 @@ Output EXACTLY 2 lines, nothing else:
 A: {disease} ...structure...
 B: {disease} ...pathology..."""
 
-
-# FUNCTII AJUTATOARE
 
 def save_results(data):
     # Functie care salveaza dictionarul cu rezultate intr-un fisier JSON
@@ -108,16 +91,12 @@ def parse_split(response_text, disease_full=""):
     return prompt_a, prompt_b
 
 
-# FUNCTIA PRINCIPALA
-
 def main():
     set_seed()
 
-    print("=" * 70)
     print("  STEP 3: SPLIT PROMPTS (Structure / Pathology)")
     print(f"  Model: {cfg.model} (no thinking, cost-optimized)")
     print(f"  Input: {cfg.input_json}")
-    print("=" * 70)
 
     # Daca cheia este inca placeholder, o cerem din consola (sau o poti seta tu direct)
     if cfg.api_key == "YOUR_API_KEY_HERE" or not cfg.api_key:
@@ -140,8 +119,6 @@ def main():
             # Permitem si structura veche (lista) si pe cea noua (dictionar)
             if isinstance(prev, dict):
                 done = prev
-            elif isinstance(prev, list):
-                done = {x["image_path"]: x for x in prev if isinstance(x, dict) and "image_path" in x}
         except Exception as e:
             print(f"  WARNING resume: {e}")
         print(f"  Resume: {len(done)} already done")
@@ -151,11 +128,11 @@ def main():
     n_new = 0
     n_err = 0
 
-    # Iteram prin poze folosind bara de progres
+    # Iteram prin poze
     for i, entry in enumerate(tqdm(prompts, desc="  Splitting")):
         img_path = entry["image_path"]
-        text     = entry.get("generated_prompt", "")
-        disease  = entry.get("disease_category", "UNKNOWN").upper()
+        text = entry.get("generated_prompt", "")
+        disease = entry.get("disease_category", "UNKNOWN").upper()
         disease_full = DISEASE_FULL.get(disease, disease)
 
         # Sarim daca am impartit deja acest text
@@ -180,14 +157,14 @@ def main():
                 response = client.models.generate_content(
                     model=cfg.model,
                     contents=SPLIT_PROMPT.format(
-                        text=text[:1500], # Limitam la 1500 de caractere pt siguranta
+                        text=text[:1500],  # Limitam la 1500 de caractere pt siguranta
                         disease=disease_full,
                     ),
                     config=types.GenerateContentConfig(
                         max_output_tokens=512,
-                        temperature=0.0, # Vrem rezultate cat mai deterministe
+                        temperature=0.0,  # Vrem rezultate cat mai deterministe
                         thinking_config=types.ThinkingConfig(
-                            thinking_budget=0, # Modelul e fortat sa NU foloseasca modul de thinking (economie tokeni)
+                            thinking_budget=0,  # Modelul e fortat sa NU foloseasca modul de thinking
                         ),
                     ),
                 )
@@ -233,15 +210,13 @@ def main():
     save_results(results)
 
     # Calcule statistice finale pentru raportul din consola
-    n_good  = sum(1 for v in results.values() if v.get("a") and v.get("b"))
+    n_good = sum(1 for v in results.values() if v.get("a") and v.get("b"))
     n_empty = sum(1 for v in results.values() if not v.get("a") or not v.get("b"))
 
-    print(f"\n{'=' * 70}")
     print(f"  DONE!")
     print(f"  Total: {len(results)} | New: {n_new} | Errors: {n_err}")
     print(f"  Good splits: {n_good} | Empty/partial: {n_empty}")
     print(f"\n  Saved: {cfg.output_json}")
-    print(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

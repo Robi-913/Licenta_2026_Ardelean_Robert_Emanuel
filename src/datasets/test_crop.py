@@ -1,15 +1,9 @@
-"""
-Test vizual: auto-crop + Gaussian blur denoise
-Genereaza 2 imagini de test pentru a vizualiza exact cum sunt prelucrate pozele OCT inainte de a intra in model.
-Arata 4 coloane: Original | Mask | Cropped | Cropped+Blur
-"""
-
 import os
-import sys
 import random
+import sys
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image, ImageFilter
 
 # Adaugam folderul parinte in path pentru a putea importa modulele proiectului curent
@@ -72,7 +66,7 @@ def main():
 
     # Amestecam indecsii datasetului pt a alege poze la intamplare
     indices = list(range(len(ds)))
-    random.seed(42) # Seed fix pt a obtine fix aceleasi imagini in plot la fiecare rulare
+    random.seed(42)  # Seed fix pt a obtine fix aceleasi imagini in plot la fiecare rulare
     random.shuffle(indices)
 
     # Extragem esantioanele din dataset
@@ -118,7 +112,7 @@ def main():
         # Popularea coloanei 0: Imaginea Originala
         axes[i, 0].imshow(np.array(img))
         axes[i, 0].set_title(f"Original ({sample['disease']})\n{img.size[0]}x{img.size[1]}")
-        axes[i, 0].axis("off") # Ascundem marcajele numerice de pe margini
+        axes[i, 0].axis("off")  # Ascundem marcajele numerice de pe margini
 
         # Popularea coloanei 1: Masca
         axes[i, 1].imshow(mask_vis, cmap="gray")
@@ -136,7 +130,7 @@ def main():
         axes[i, 3].axis("off")
 
     plt.suptitle("Pipeline: Original -> Mask -> Auto-Crop -> Denoise", fontsize=16, y=1.01)
-    plt.tight_layout() # Spatiaza automat elementele ca sa nu se incalece
+    plt.tight_layout()  # Spatiaza automat elementele ca sa nu se incalece
 
     out_path = "experiments/figures/auto_crop_test.png"
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

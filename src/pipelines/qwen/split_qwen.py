@@ -1,15 +1,5 @@
-"""
-[ARCHIVED / TESTED - NOT MOVING FORWARD]
-
-Acesta este un script vechi, pastrat ca dovada (proof of concept) ca s-a incercat
-impartirea prompturilor in Partea A si Partea B folosind un model local (Qwen2.5-7B).
-A fost inlocuit in pipeline-ul principal de varianta cu Gemini API (Step 3),
-deoarece API-ul este mult mai rapid si mai stabil pentru task-uri stricte de formatare a textului.
-"""
-
 import json
 import re
-from collections import Counter
 from pathlib import Path
 
 import torch
@@ -19,7 +9,6 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 # Folosim calea absoluta pentru a evita problemele de import relativ
 from src.utils.seed import set_seed
 
-# CONFIGURARI
 
 class Config:
     # Setarile pentru modelul local folosit la teste
@@ -41,8 +30,6 @@ class Config:
 cfg = Config()
 
 
-# INCARCARE MODEL
-
 def load_model():
     print(f"\n  Model: {cfg.model_path} (Text-Only Mode)")
 
@@ -57,8 +44,6 @@ def load_model():
 
     return mdl, proc
 
-
-# CONSTRUCTIA PROMPT-ULUI (Instructiunile)
 
 # Regulile stricte pentru Qwen: fara culori, fara sfaturi medicale, format exact.
 SYS_PROMPT = (
@@ -83,8 +68,6 @@ def make_request(long_text):
         f"Output exactly in this format:\nPROMPT_A: ...\nPROMPT_B: ..."
     )
 
-
-# EXECUTIA MODELULUI
 
 @torch.no_grad()
 def call_model(mdl, proc, long_text, extra=""):
@@ -115,8 +98,6 @@ def call_model(mdl, proc, long_text, extra=""):
 
     return proc.decode(out[0][prefix:], skip_special_tokens=True).strip()
 
-
-# VALIDARE SI PARSARE
 
 def clean(s):
     # Curata spatiile duble si spatiile inainte de semnele de punctuatie
@@ -217,8 +198,6 @@ def do_split(mdl, proc, long_text):
     return best_a, best_b, False, best_problems
 
 
-# PROCESARE IN MASA (BATCH)
-
 def save_out(data):
     out = Path(cfg.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -275,14 +254,11 @@ def run_all(mdl, proc, data):
     save_out(results)
     return results, n_err, n_skip
 
-# EXECUTIE PRINCIPALA
 
 def main():
     set_seed()
 
-    print("=" * 70)
     print("  [ARCHIVED] STEP 3: PROMPT SPLITTING WITH LOCAL QWEN")
-    print("=" * 70)
 
     with open(cfg.src_json, "r", encoding="utf-8") as f:
         raw = json.load(f)
@@ -295,7 +271,6 @@ def main():
 
     print(f"\n  Finalizat: {len(results)} inregistrari salvate.")
     print(f"  Erori: {n_err} | Sarite: {n_skip}")
-    print("=" * 70)
 
 
 if __name__ == "__main__":

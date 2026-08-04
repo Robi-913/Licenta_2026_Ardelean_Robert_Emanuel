@@ -1,16 +1,3 @@
-"""
-train_cnn_v2.py — Antrenare CNN Baseline (ResNet18) pe splits_v3
-
-Diferente fata de v1:
-  - Dataset: splits_v3 (patient-grouped, fara leakage) in loc de cel vechi
-  - CSV format: image_path + disease (ca OCT5kDataset) in loc de format vechi
-  - Imagini din IMG_DIRS (acelasi sistem de localizare ca OCT5kDataset)
-  - Antrenare pura pe clasificare — fara text, fara severitate
-
-Rulare:
-    python -m src.pipelines.cnn.train_cnn_v2
-"""
-
 import os
 import shutil
 import sys
@@ -22,10 +9,10 @@ import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from PIL import Image, ImageFilter
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from PIL import Image, ImageFilter
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -37,17 +24,17 @@ from src.utils.seed import set_seed
 # CONFIG
 
 class Config:
-    splits_dir    = "data/oct5k/splits_v3"
-    img_size      = 224
-    n_classes     = 4      # AMD / DME / DRUSEN / NORMAL
-    batch_size    = 32
-    epochs        = 30
-    lr            = 1e-3
-    workers       = 4
-    patience      = 8      # early stopping
-    output_dir    = "experiments/cnn_v2"
-    ckpt_final    = "checkpoints/resnet18_v2_final.pth"
-    device        = "cuda" if torch.cuda.is_available() else "cpu"
+    splits_dir = "data/oct5k/splits_v3"
+    img_size = 224
+    n_classes = 4  # AMD / DME / DRUSEN / NORMAL
+    batch_size = 32
+    epochs = 30
+    lr = 1e-3
+    workers = 4
+    patience = 8  # early stopping
+    output_dir = "experiments/cnn_v2"
+    ckpt_final = "checkpoints/resnet18_v2_final.pth"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 cfg = Config()
@@ -117,18 +104,19 @@ class OCT5kCNNDataset(Dataset):
                 n_missing += 1
                 continue
             self.samples.append({
-                "path":  path,
+                "path": path,
                 "label": self.lbl_map[row["disease"]],
             })
 
         self.transform = _get_transforms(mode)
-        print(f"  OCT5kCNN [{mode}]: {len(self.samples)} imagini, {n_missing} lipsa, {len(self.classes)} clase: {self.classes}")
+        print(
+            f"  OCT5kCNN [{mode}]: {len(self.samples)} imagini, {n_missing} lipsa, {len(self.classes)} clase: {self.classes}")
 
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> dict:
-        s   = self.samples[idx]
+        s = self.samples[idx]
         img = Image.open(s["path"]).convert("RGB")
         img = img.filter(ImageFilter.GaussianBlur(radius=0.5))  # reduce speckle OCT
         return {"image": self.transform(img), "label": s["label"]}
@@ -144,11 +132,11 @@ def _collate(batch: list) -> dict:
 # TRAINING & VALIDATION
 
 def run_train_epoch(
-    model: ResNet18OCT,
-    loader: DataLoader,
-    criterion: nn.CrossEntropyLoss,
-    optimizer: optim.Adam,
-    epoch: int,
+        model: ResNet18OCT,
+        loader: DataLoader,
+        criterion: nn.CrossEntropyLoss,
+        optimizer: optim.Adam,
+        epoch: int,
 ) -> tuple[float, float]:
     model.train()
     tot_loss, all_preds, all_labels = 0.0, [], []
@@ -160,26 +148,26 @@ def run_train_epoch(
 
         optimizer.zero_grad()
         outputs = model(images)
-        loss    = criterion(outputs, labels)
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
 
-        tot_loss   += loss.item()
-        preds       = outputs.argmax(dim=1)
+        tot_loss += loss.item()
+        preds = outputs.argmax(dim=1)
         all_preds.extend(preds.cpu().numpy())
         all_labels.extend(labels.cpu().numpy())
         pbar.set_postfix(loss=f"{loss.item():.4f}")
 
     avg_loss = tot_loss / len(loader)
-    acc      = accuracy_score(all_labels, all_preds)
+    acc = accuracy_score(all_labels, all_preds)
     return avg_loss, acc
 
 
 @torch.no_grad()
 def run_val(
-    model: ResNet18OCT,
-    loader: DataLoader,
-    criterion: nn.CrossEntropyLoss,
+        model: ResNet18OCT,
+        loader: DataLoader,
+        criterion: nn.CrossEntropyLoss,
 ) -> tuple[float, float, float, list, list]:
     model.eval()
     tot_loss, all_preds, all_labels = 0.0, [], []
@@ -193,8 +181,8 @@ def run_val(
         all_labels.extend(labels.cpu().numpy())
 
     avg_loss = tot_loss / len(loader)
-    acc      = accuracy_score(all_labels, all_preds)
-    f1       = f1_score(all_labels, all_preds, average="macro")
+    acc = accuracy_score(all_labels, all_preds)
+    f1 = f1_score(all_labels, all_preds, average="macro")
     return avg_loss, acc, f1, all_preds, all_labels
 
 
@@ -205,14 +193,16 @@ def save_training_curves(history: dict) -> None:
 
     ep = range(1, len(history["train_loss"]) + 1)
     axes[0].plot(ep, history["train_loss"], label="Train", marker="o")
-    axes[0].plot(ep, history["val_loss"],   label="Val",   marker="s")
+    axes[0].plot(ep, history["val_loss"], label="Val", marker="s")
     axes[0].set(title="Loss", xlabel="Epoch", ylabel="Loss")
-    axes[0].legend(); axes[0].grid(alpha=0.3)
+    axes[0].legend();
+    axes[0].grid(alpha=0.3)
 
     axes[1].plot(ep, history["val_acc"], label="Accuracy", marker="o", color="green")
-    axes[1].plot(ep, history["val_f1"],  label="F1 Macro", marker="s", color="orange")
+    axes[1].plot(ep, history["val_f1"], label="F1 Macro", marker="s", color="orange")
     axes[1].set(title="Validation Metrics", xlabel="Epoch", ylabel="Score")
-    axes[1].legend(); axes[1].grid(alpha=0.3)
+    axes[1].legend();
+    axes[1].grid(alpha=0.3)
 
     plt.tight_layout()
     plt.savefig(f"{cfg.output_dir}/loss_curves.png", dpi=150)
@@ -224,7 +214,9 @@ def save_confusion_matrix(y_true: list, y_pred: list, classes: list) -> None:
     cm = confusion_matrix(y_true, y_pred)
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes)
-    plt.xlabel("Predicted"); plt.ylabel("True"); plt.title("Confusion Matrix — CNN v2 (splits_v3)")
+    plt.xlabel("Predicted");
+    plt.ylabel("True");
+    plt.title("Confusion Matrix — CNN v2 (splits_v3)")
     plt.tight_layout()
     plt.savefig(f"{cfg.output_dir}/confusion_matrix.png", dpi=150)
     plt.close()
@@ -240,25 +232,25 @@ def main():
     print(f"  Device: {cfg.device} | Epochs: {cfg.epochs} | BS: {cfg.batch_size} | LR: {cfg.lr}")
 
     train_ds = OCT5kCNNDataset(f"{cfg.splits_dir}/train.csv", mode="train")
-    val_ds   = OCT5kCNNDataset(f"{cfg.splits_dir}/val.csv",   mode="eval")
-    test_ds  = OCT5kCNNDataset(f"{cfg.splits_dir}/test.csv",  mode="eval")
+    val_ds = OCT5kCNNDataset(f"{cfg.splits_dir}/val.csv", mode="eval")
+    test_ds = OCT5kCNNDataset(f"{cfg.splits_dir}/test.csv", mode="eval")
 
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,
                               num_workers=cfg.workers, pin_memory=True, collate_fn=_collate)
-    val_loader   = DataLoader(val_ds,   batch_size=cfg.batch_size, shuffle=False,
-                              num_workers=cfg.workers, pin_memory=True, collate_fn=_collate)
-    test_loader  = DataLoader(test_ds,  batch_size=cfg.batch_size, shuffle=False,
-                              num_workers=cfg.workers, pin_memory=True, collate_fn=_collate)
+    val_loader = DataLoader(val_ds, batch_size=cfg.batch_size, shuffle=False,
+                            num_workers=cfg.workers, pin_memory=True, collate_fn=_collate)
+    test_loader = DataLoader(test_ds, batch_size=cfg.batch_size, shuffle=False,
+                             num_workers=cfg.workers, pin_memory=True, collate_fn=_collate)
 
-    model     = ResNet18OCT(num_classes=cfg.n_classes, use_pretrained=False).to(cfg.device)
+    model = ResNet18OCT(num_classes=cfg.n_classes, use_pretrained=False).to(cfg.device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
 
-    history    = dict(train_loss=[], val_loss=[], val_acc=[], val_f1=[])
-    best_f1    = 0.0
-    wait       = 0
+    history = dict(train_loss=[], val_loss=[], val_acc=[], val_f1=[])
+    best_f1 = 0.0
+    wait = 0
     best_preds = []
-    best_labels= []
+    best_labels = []
 
     for epoch in range(1, cfg.epochs + 1):
         train_loss, train_acc = run_train_epoch(model, train_loader, criterion, optimizer, epoch)
@@ -273,9 +265,9 @@ def main():
               f"V_loss={val_loss:.4f} V_acc={val_acc:.3f} V_F1={val_f1:.4f}")
 
         if val_f1 > best_f1:
-            best_f1     = val_f1
-            wait        = 0
-            best_preds  = val_preds
+            best_f1 = val_f1
+            wait = 0
+            best_preds = val_preds
             best_labels = val_labels
             torch.save({
                 "epoch": epoch, "model_state_dict": model.state_dict(),
@@ -283,7 +275,7 @@ def main():
                 "val_f1": val_f1, "val_acc": val_acc,
                 "classes": train_ds.classes,
             }, f"{cfg.output_dir}/ckpts/best.pth")
-            print(f"  ★ Best: {best_f1:.4f}")
+            print(f"   Best: {best_f1:.4f}")
         else:
             wait += 1
             print(f"  ({wait}/{cfg.patience})")

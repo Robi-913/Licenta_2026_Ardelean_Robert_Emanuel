@@ -1,9 +1,4 @@
 """
-YOLOE Bounding Box Generation
-
-Ruleaza modelul YOLOE pe imaginile OCT5k care nu au deja adnotari de la medici.
-Salveaza rezultatele in format JSON cu coordonate absolute si normalizate.
-
 Format:
 {
   "image_path": {
@@ -18,7 +13,6 @@ Format:
     ]
   }
 }
-
 """
 
 import argparse
@@ -27,32 +21,26 @@ import os
 import sys
 from pathlib import Path
 
-import pandas as pd
 from tqdm import tqdm
 from ultralytics import YOLO
 
-# Permite importul modulelor din folderul parinte (ex: utils)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
-
-
-
-# CONFIG
 
 
 class Config:
     # Calea catre modelul YOLO antrenat si fisierele JSON necesare
-    yolo_ckpt   = "model/yoloe_oct5k.pt"
+    yolo_ckpt = "model/yoloe_oct5k.pt"
     master_json = "data/oct5k/metadata/_master.json"
-    splits_dir  = "data/oct5k/splits"
-    out_json    = "data/oct5k/yolo_bboxes.json"
+    splits_dir = "data/oct5k/splits"
+    out_json = "data/oct5k/yolo_bboxes.json"
 
     # Pragul minim de incredere (confidence) si suprapunere (IoU) pt a pastra o detectie
-    conf        = 0.25
-    iou         = 0.45
+    conf = 0.25
+    iou = 0.45
+
 
 cfg = Config()
 
-# Folderele in care cautam pozele daca path-ul din fisier nu este perfect
 IMG_DIRS = [
     "data/OCT5k/Images/Images_Automatic",
     "data/OCT5k/Images/Images_Manual",
@@ -60,12 +48,7 @@ IMG_DIRS = [
 ]
 
 
-
-# HELPERS
-
-
 def locate_image(meta):
-    # Cauta imaginea fizic pe disk pornind de la caile din metadate
     disk = meta.get("image_disk_path", "")
     if disk and Path(disk).exists():
         return str(disk)
@@ -93,25 +76,19 @@ def get_doctor_image_paths(master_json):
     return {m["image_path"] for m in metadata if m.get("has_bounding_boxes")}
 
 
-
-# MAIN
-
-
 def main():
     # Setam argumente CLI pt a putea suprascrie usoare setarile standard daca dorim
     parser = argparse.ArgumentParser(description="YOLOE bbox generation pe OCT5k")
     parser.add_argument("--conf", type=float, default=cfg.conf, help="Confidence threshold")
-    parser.add_argument("--iou",  type=float, default=cfg.iou,  help="IoU threshold")
+    parser.add_argument("--iou", type=float, default=cfg.iou, help="IoU threshold")
     parser.add_argument("--only-missing", action="store_true", help="Sare peste imaginile deja procesate")
     args = parser.parse_args()
 
-    print("=" * 70)
     print("  YOLOE Bounding Box Generation - OCT5k")
     print(f"  Model: {cfg.yolo_ckpt}")
     print(f"  Conf threshold: {args.conf} | IoU: {args.iou}")
-    print("=" * 70)
 
-    # Incarcam catalogul master cu informatiile despre toate cele 4573 de poze
+    # Incarcam catalogul master cu informatiile despre toate poze
     print(f"\n  Loading metadata from {cfg.master_json}...")
     with open(cfg.master_json, "r", encoding="utf-8") as f:
         master = json.load(f)
@@ -143,15 +120,15 @@ def main():
 
     # Contoare pt statistici la final de script
     n_doctor = 0
-    n_yolo   = 0
-    n_skip   = 0
+    n_yolo = 0
+    n_skip = 0
     n_no_img = 0
     n_no_det = 0
 
     all_paths = list(metadata_dict.keys())
     print(f"\n  Processing {len(all_paths)} imagini...\n")
 
-    # Bucleaza prin absolut toate caile, cu un progress bar (tqdm)
+    # Bucleaza prin absolut toate caile de imagine
     for image_path in tqdm(all_paths, desc="  YOLOE"):
 
         # Daca l-am calculat la o rulare trecuta, sarim peste
@@ -174,7 +151,7 @@ def main():
         # pt restul: le cautam pe disk si le dam modelului YOLO
         img_path = locate_image(meta)
 
-        # Daca fisierul lipseste, nu spargem programul, doar scriem eroarea si contorizam defectul
+        # Daca fisierul lipseste, doar scriem eroarea si contorizam
         if img_path is None:
             results[image_path] = {
                 "bbox_source": "yolo",
@@ -201,9 +178,9 @@ def main():
             # Daca exista cutii desenate (detectii valide)
             if r.boxes is not None and len(r.boxes) > 0:
                 for box in r.boxes:
-                    cls_id   = int(box.cls.item())
+                    cls_id = int(box.cls.item())
                     cls_name = class_names.get(cls_id, f"class_{cls_id}")
-                    conf     = round(float(box.conf.item()), 4)
+                    conf = round(float(box.conf.item()), 4)
 
                     # Luam formatul de cutie YOLO (centru_x, centru_y, latime, inaltime) in procente (normalizat 0-1)
                     xywhn = box.xywhn[0].cpu().numpy().tolist()
@@ -214,9 +191,9 @@ def main():
 
                     # Salvam leziunea in lista noastra
                     lesions.append({
-                        "class":      cls_name,
-                        "bbox_yolo":  [round(v, 6) for v in xywhn],
-                        "bbox_abs":   [x1, y1, x2, y2],
+                        "class": cls_name,
+                        "bbox_yolo": [round(v, 6) for v in xywhn],
+                        "bbox_abs": [x1, y1, x2, y2],
                         "confidence": conf,
                     })
 
@@ -227,14 +204,14 @@ def main():
         # Salvam leziunile prelucrate (sau o lista goala daca e sanatos) in inregistrarea noii poze
         results[image_path] = {
             "bbox_source": "yolo",
-            "lesions":     lesions,
+            "lesions": lesions,
         }
         n_yolo += 1
 
     # Dupa ce s-a terminat bucla for, pregatim folderul pt fisierul json
     os.makedirs(os.path.dirname(cfg.out_json), exist_ok=True)
 
-    # Varsam datele cu write mode ("w")
+    # Scriem datele cu write mode ("w")
     with open(cfg.out_json, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 
@@ -249,10 +226,7 @@ def main():
         if v["bbox_source"] == "yolo"
     )
 
-    # Printam un raport curat
-    print(f"\n{'=' * 70}")
     print(f"  DONE!")
-    print(f"{'=' * 70}")
     print(f"  Total procesate:         {len(results)}")
     print(f"  Bbox doctor (originale): {n_doctor}")
     print(f"  Bbox YOLO generate:      {n_yolo}")
@@ -262,7 +236,6 @@ def main():
     if n_skip > 0:
         print(f"  Sarite (deja exist):   {n_skip}")
     print(f"\n  Saved: {cfg.out_json}")
-    print(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

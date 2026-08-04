@@ -1,20 +1,3 @@
-"""
-linear_probe.py — Linear Probing pe cls_head
-
-Ce face:
-  1. Incarca best.pth din v13
-  2. Ingheata TOT (backbone, LoRA, fusion, sev_head, logit_scale)
-  3. Reseteaza cls_head cu un MLP mai adanc (512 hidden)
-  4. Antreneaza cls_head SINGUR pe features NORMALIZATE (spatiul contrastiv R@1=86%)
-  5. Salveaza final_with_probe.pth
-
-R@1 ramane neatins — nu atingem backbone-ul.
-Cls ar trebui sa urce semnificativ. Dureaza 3-5 minute.
-
-Rulare:
-    python -m src.pipelines.medsiglip.linear_probe
-"""
-
 import os
 import sys
 
@@ -42,7 +25,7 @@ class Config:
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
     severity_json = "data/oct5k/severity_scores_v2.json"
 
-    # LoRA — identic cu v13, altfel cheile din checkpoint nu se potrivesc
+    # LoRA — identic cu v15, altfel cheile din checkpoint nu se potrivesc
     lora_rank = 16
     lora_alpha = 32
     lora_dropout = 0.05
@@ -51,12 +34,12 @@ class Config:
     probe_epochs = 20
     probe_lr = 3e-4
     probe_wd = 0.01
-    probe_hidden = 512   # mai adanc decat head-ul original de 256
+    probe_hidden = 512  # mai adanc decat head-ul original de 256
     probe_dropout = 0.3
 
     batch_size = 32
     bs = 32
-    bbox_weight = 3.0     # oversampling pt imaginile cu leziuni adnotate
+    bbox_weight = 3.0  # oversampling pt imaginile cu leziuni adnotate
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     use_amp = torch.cuda.is_available()
@@ -131,14 +114,14 @@ def evaluate(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
             hits = sum(labels[i] in labels[top_k[i]] for i in range(n))
             metrics[f"{tag}_R@{k}"] = 100.0 * hits / n
 
-    sev_pred_pct  = torch.cat(all_sev_preds)  * 100
+    sev_pred_pct = torch.cat(all_sev_preds) * 100
     sev_label_pct = torch.cat(all_sev_labels) * 100
     metrics["sev_mae"] = (sev_pred_pct - sev_label_pct).abs().mean().item()
     metrics["cls_acc"] = (torch.cat(all_cls_preds) == labels).float().mean().item() * 100
 
     avg_r1 = (metrics["I2T_R@1"] + metrics["T2I_R@1"]) / 2
     metrics["avg_r1"] = avg_r1
-    metrics["score"]  = 0.5 * avg_r1 + 0.25 * metrics["cls_acc"] + 0.25 * max(0, 100 - metrics["sev_mae"])
+    metrics["score"] = 0.5 * avg_r1 + 0.25 * metrics["cls_acc"] + 0.25 * max(0, 100 - metrics["sev_mae"])
     return metrics
 
 
@@ -270,7 +253,7 @@ def main():
             best_epoch = epoch + 1
             torch.save(model.state_dict(), f"{cfg.experiment_dir}/ckpts/best_probe.pth")
 
-        marker = f"  ★ Best: {best_val_acc:.1f}%" if improved else ""
+        marker = f"   Best: {best_val_acc:.1f}%" if improved else ""
         print(f"  Ep {epoch + 1}: Loss={train_loss:.4f} | Train={train_acc:.1f}% | Val={val_acc:.1f}%{marker}")
 
     # Evaluare completa cu best probe checkpoint

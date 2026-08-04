@@ -1,13 +1,3 @@
-"""
-Generate Medical Descriptive Captions cu MedGemma
-
-Nota: Am testat ambele variante (MedGemma 4B si MedGemma 27B IT).
-Aici folosim varianta de 27B (multimodal, mult mai detaliat).
-Pentru a incapea in 24GB VRAM, aplicam cuantizare pe 4-bit si offload pe disk.
-
-Prompt-ul se adapteaza in functie de sursa cutiilor (doctor, yolo sau lipsa lor).
-"""
-
 import gc
 import json
 import os
@@ -26,27 +16,21 @@ from transformers import (
 from src.utils.seed import set_seed
 
 
-# CONFIG
-
 class Config:
     model_path = "model/medgemma-27b-it"
-    master_json    = "data/oct5k/metadata_v2/_master.json"
+    master_json = "data/oct5k/metadata_v2/_master.json"
     output_json = "data/oct5k/medgemma_prompts_v2_27b.json"
 
-    # Setari pentru generarea de text
-    max_tokens     = 256
-    save_interval  = 50
-    resume         = True
-    device         = "cuda" if torch.cuda.is_available() else "cpu"
+    max_tokens = 256
+    save_interval = 50
+    resume = True
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    load_in_4bit   = True
+    load_in_4bit = True
 
-    # La un total de 32GB RAM, lasam putin pt sistem si folosim max 26GB
-    max_cpu_mem    = "26GiB"
-    # Din 24GB VRAM ai placii video, declaram doar 22GB pt a lasa loc cache-ului necesar generarii
-    max_gpu_mem    = "22GiB"
-    # Folderul unde modelul va scrie pe disk daca ramane fara memorie RAM (safety net)
-    offload_dir    = "offload_tmp"
+    max_cpu_mem = "26GiB"
+    max_gpu_mem = "22GiB"
+    offload_dir = "offload_tmp"
 
 
 cfg = Config()
@@ -57,8 +41,6 @@ IMG_DIRS = [
     "data/OCT5k/Detection/Images",
 ]
 
-
-# HELPERS
 
 def save_results(data):
     # Salveaza progresul in format JSON
@@ -91,7 +73,7 @@ def load_model():
     print(f"  4-bit quantization: {cfg.load_in_4bit}")
     print(f"  Max GPU mem: {cfg.max_gpu_mem}, Max CPU mem: {cfg.max_cpu_mem}")
 
-    # Curatam memoria inainte sa incepem incarcarea masiva
+    # Curatam memoria inainte sa incepem incarcarea modelului
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -113,9 +95,6 @@ def load_model():
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
-    # Incarcam modelul propriu-zis. Setarea torch_dtype=torch.bfloat16 este CRUCIALA.
-    # Daca lipseste, modelul se incarca intai in format float32 ocupand ~54GB de RAM si blocand PC-ul,
-    # si abia apoi s-ar transforma in 4-biti. Cu bfloat16 limitam varful de memorie la inceput.
     mdl = AutoModelForImageTextToText.from_pretrained(
         cfg.model_path,
         quantization_config=quant_cfg,
@@ -123,14 +102,14 @@ def load_model():
         max_memory=max_mem,
         offload_folder=cfg.offload_dir,
         low_cpu_mem_usage=True,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     )
-    mdl.eval() # Punem modelul in modul de inferenta (nu invata nimic acum)
+    mdl.eval()  # Punem modelul in modul de inferenta (nu invata nimic acum)
 
     # Printam un mic status al memoriei dupa incarcare
     if torch.cuda.is_available():
-        used  = torch.cuda.memory_allocated() / 1024 ** 3
-        peak  = torch.cuda.max_memory_allocated() / 1024 ** 3
+        used = torch.cuda.memory_allocated() / 1024 ** 3
+        peak = torch.cuda.max_memory_allocated() / 1024 ** 3
         total = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
         print(f"  VRAM: {used:.1f}GB used / {peak:.1f}GB peak / {total:.1f}GB total")
 
@@ -141,13 +120,13 @@ def load_model():
 # PROMPT BUILDER
 
 def build_prompt(meta):
-    disease     = str(meta.get("disease_category", "UNKNOWN")).upper()
+    disease = str(meta.get("disease_category", "UNKNOWN")).upper()
     bbox_source = meta.get("bbox_source", "none")
 
     # Partea comuna a instructiunii initiale
     base_header = f"You are an expert ophthalmic image analyzer. Provide a highly detailed, objective morphological description of this retinal OCT scan ({disease})."
 
-    # Adaptam finalul instructiunii pe baza sursei datelor de detectie (KISS & DRY)
+    # Adaptam finalul instructiunii pe baza sursei datelor de detectie
     if bbox_source == "doctor":
         header = f"{base_header} The following lesion annotations were manually labeled by medical doctors and are ground truth."
     elif bbox_source == "yolo":
@@ -182,10 +161,10 @@ def build_prompt(meta):
         # Adaugam informatii despre deformarile structurale
         n_def = int(b.get("num_deformations", 0))
         if n_def > 0:
-            zones    = b.get("deformation_zones", [])
+            zones = b.get("deformation_zones", [])
             zone_set = list(set(d.get("zone", "unknown") for d in zones))
             type_set = list(set(d.get("type", "deformation") for d in zones))
-            max_dev  = max((d.get("deviation_from_mean_px", 0) for d in zones), default=0)
+            max_dev = max((d.get("deviation_from_mean_px", 0) for d in zones), default=0)
 
             parts.append(
                 f"- Structural Deformations: {n_def} abnormal points. "
@@ -194,12 +173,12 @@ def build_prompt(meta):
             )
 
     # Adaugam lista de leziuni identificate (daca exista)
-    n_les   = int(meta.get("num_lesions", 0))
+    n_les = int(meta.get("num_lesions", 0))
     has_les = meta.get("has_bounding_boxes") and n_les > 0
 
     if has_les:
         cls_list = ", ".join(sorted(set(meta.get("lesion_classes", []))))
-        area     = meta.get("total_lesion_area_percent", 0)
+        area = meta.get("total_lesion_area_percent", 0)
         src_note = " (YOLO-detected, confidence shown)" if bbox_source == "yolo" else " (doctor-annotated)"
 
         parts.append(
@@ -210,8 +189,8 @@ def build_prompt(meta):
         # Tratam individual primele 5 leziuni ca exemple detaliate
         for les in meta.get("lesions", [])[:5]:
             layer = les.get("layer_correlation", {}).get("affected_layer", "unknown")
-            zone  = les.get("retinal_zone", "unknown")
-            sz    = les.get("size_px", [0, 0])
+            zone = les.get("retinal_zone", "unknown")
+            sz = les.get("size_px", [0, 0])
 
             # Pentru YOLO adaugam cat de sigura a fost predictia
             conf_note = ""
@@ -241,9 +220,7 @@ def build_prompt(meta):
     return "\n".join(parts)
 
 
-# GENERATOR RUNNER
-
-@torch.no_grad() # Extrem de important: dezactiveaza calculul de gradienti economisind enorm de multa memorie
+@torch.no_grad()  # Extrem de important: dezactiveaza calculul de gradienti economisind enorm de multa memorie
 def run_generate(mdl, proc, msgs, input_keys):
     # Formateaza promptul pe baza template-ului intern specific modelului Gemma
     inputs = proc.apply_chat_template(
@@ -262,7 +239,7 @@ def run_generate(mdl, proc, msgs, input_keys):
     out = mdl.generate(
         **feed,
         max_new_tokens=cfg.max_tokens,
-        do_sample=False,         # Generare determinista (cea mai probabila varianta de cuvant de fiecare data)
+        do_sample=False,  # Generare determinista (cea mai probabila varianta de cuvant de fiecare data)
         repetition_penalty=1.1,  # Impiedicam modelul sa repete obsesiv aceleasi cuvinte
         pad_token_id=proc.tokenizer.eos_token_id,
     )
@@ -274,8 +251,6 @@ def run_generate(mdl, proc, msgs, input_keys):
     del inputs, feed, out
     return decoded.strip()
 
-
-# MAIN LOOP
 
 def process_all(mdl, proc, metadata):
     # Incarcam progresul vechi ca sa nu calculam aceleasi imagini de doua ori
@@ -289,35 +264,35 @@ def process_all(mdl, proc, metadata):
                     x["image_path"]: x["generated_prompt"]
                     for x in prev
                     if isinstance(x, dict)
-                    and "image_path" in x
-                    and "generated_prompt" in x
+                       and "image_path" in x
+                       and "generated_prompt" in x
                 }
         except Exception as e:
             print(f"  WARNING resume: {e}")
         print(f"  Resume: {len(done)} already done")
 
     results = []
-    n_skip  = 0
-    n_err   = 0
+    n_skip = 0
+    n_err = 0
 
-    # Iteram prin toate imaginile folosind bara de progres tqdm
+    # Iteram prin toate imaginile
     for i, meta in enumerate(tqdm(metadata, desc="  Generating")):
-        img_path    = meta["image_path"]
-        disease     = meta["disease_category"]
+        img_path = meta["image_path"]
+        disease = meta["disease_category"]
         bbox_source = meta.get("bbox_source", "none")
 
         # Sarim daca am generat deja caption pt aceasta imagine
         if img_path in done:
             results.append({
-                "image_path":       img_path,
+                "image_path": img_path,
                 "disease_category": disease,
-                "bbox_source":      bbox_source,
+                "bbox_source": bbox_source,
                 "generated_prompt": done[img_path],
             })
             n_skip += 1
             continue
 
-        txt      = build_prompt(meta)
+        txt = build_prompt(meta)
         img_file = locate_image(meta)
 
         try:
@@ -331,23 +306,23 @@ def process_all(mdl, proc, metadata):
             content.append({"type": "text", "text": txt})
 
             has_img = any(c["type"] == "image" for c in content)
-            keys    = ["input_ids", "attention_mask"]
+            keys = ["input_ids", "attention_mask"]
             if has_img:
-                keys.append("pixel_values") # Pixel values apar doar daca exista poza efectiv
+                keys.append("pixel_values")  # Pixel values apar doar daca exista poza efectiv
 
-            msgs    = [{"role": "user", "content": content}]
+            msgs = [{"role": "user", "content": content}]
             caption = run_generate(mdl, proc, msgs, keys)
 
         except Exception as e:
             caption = f"ERROR: {e}"
-            n_err  += 1
+            n_err += 1
 
             # Daca e eroare de memorie CUDA, oprim de tot si salvam cat s-a lucrat
             if "CUDA" in str(e).upper():
                 results.append({
-                    "image_path":       img_path,
+                    "image_path": img_path,
                     "disease_category": disease,
-                    "bbox_source":      bbox_source,
+                    "bbox_source": bbox_source,
                     "generated_prompt": caption,
                 })
                 save_results(results)
@@ -355,9 +330,9 @@ def process_all(mdl, proc, metadata):
 
         # Adaugam generarea in lista de rezultate curente
         results.append({
-            "image_path":       img_path,
+            "image_path": img_path,
             "disease_category": disease,
-            "bbox_source":      bbox_source,
+            "bbox_source": bbox_source,
             "generated_prompt": caption,
         })
 
@@ -373,16 +348,12 @@ def process_all(mdl, proc, metadata):
     return results, n_err, n_skip
 
 
-# MAIN ENTRY POINT
-
 def main():
     set_seed()
 
-    print("=" * 70)
     print("  STEP 2: GENERATE MEDICAL CAPTIONS - MedGemma 27B IT")
     print("  Sursa bbox: doctor (ground truth) | yolo (silver) | none")
     print("  LOW MEMORY MODE: 32GB RAM + 24GB VRAM")
-    print("=" * 70)
 
     with open(cfg.master_json, "r", encoding="utf-8") as f:
         metadata = json.load(f)
@@ -397,10 +368,10 @@ def main():
     results, n_err, n_skip = process_all(mdl, proc, metadata)
 
     # Calculam lungimile textelor generate pt a face un mic raport de performanta la sfarsit
-    good        = [r for r in results if not r["generated_prompt"].startswith("ERROR")]
+    good = [r for r in results if not r["generated_prompt"].startswith("ERROR")]
     word_counts = [len(r["generated_prompt"].split()) for r in good]
     per_disease = Counter(r["disease_category"] for r in results)
-    per_source  = Counter(r.get("bbox_source", "none") for r in results)
+    per_source = Counter(r.get("bbox_source", "none") for r in results)
 
     # Raportul de final
     print(f"\n  Total: {len(results)} | Errors: {n_err} | Skipped: {n_skip}")
@@ -417,7 +388,6 @@ def main():
         print(f"\n  Words per caption: avg={avg:.0f}, min={min(word_counts)}, max={max(word_counts)}")
 
     print(f"\n  Saved: {cfg.output_json}")
-    print("=" * 70)
 
     # Cleanup major cand script-ul a terminat
     del mdl, proc

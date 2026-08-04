@@ -1,12 +1,3 @@
-"""
-[ARCHIVED / TESTED - NOT MOVING FORWARD]
-
-Acesta este un script vechi, pastrat ca dovada (proof of concept) ca s-a incercat
-si varianta de a calcula scorul de severitate direct din text folosind Qwen2.5-7B-Instruct.
-A fost inlocuit in pipeline-ul principal de abordarea determinista cu MedGemma (Severity Scoring v2).
-NU este folosit mai departe in logica de business.
-"""
-
 import json
 import random
 import re
@@ -17,7 +8,6 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# CONFIGURARI
 
 class Config:
     # Setarile pentru modelul Qwen folosit ca test local
@@ -40,7 +30,6 @@ class Config:
 
 cfg = Config()
 
-# INCARCARE MODEL
 
 def load_model():
     print(f"\n  Model: {cfg.model_path}")
@@ -56,8 +45,6 @@ def load_model():
     print(f"  VRAM: {torch.cuda.memory_allocated() / 1024 ** 3:.1f} GB")
     return mdl, tok
 
-
-# PROMPT-UL SISTEMULUI (Regulile pentru Qwen)
 
 SYS_PROMPT = (
     "You are a retinal disease severity estimator for OCT scans.\n"
@@ -82,7 +69,7 @@ SYS_PROMPT = (
     "Severity: <number>%"
 )
 
-# GENERARE SI PARSARE
+
 @torch.no_grad()
 def call_model(mdl, tok, description, extra=""):
     # Formateaza mesajul userului incluzand descrierea OCT si formatul strict
@@ -166,6 +153,7 @@ def score_one(mdl, tok, description):
     # Daca a esuat de toate datile, intoarcem eroare
     return None, None, last_raw, False, ["parse_failed"]
 
+
 # FUNCTII DE SALVARE
 def save_out(data):
     # Salveaza progresul pe disc sub forma de fisier JSON
@@ -174,8 +162,6 @@ def save_out(data):
     with out.open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-
-# BUCLA PRINCIPALA DE RULARE
 
 def run_all(mdl, tok, data):
     # Logica de resume pt a nu re-procesa imagini deja calculate
@@ -245,14 +231,11 @@ def run_all(mdl, tok, data):
     save_out(results)
     return results, n_err
 
-# MAIN
 
 def main():
     random.seed(42)
 
-    print("=" * 70)
     print("  [ARCHIVED] STEP 3: SEVERITY SCORING WITH QWEN2.5-7B-INSTRUCT")
-    print("=" * 70)
 
     # Incarcam setul de date cu prompturile de la MedGemma
     with open(cfg.src_json, "r", encoding="utf-8") as f:
@@ -297,7 +280,6 @@ def main():
             avg = sum(sevs) / len(sevs)
             print(f"  {cat}: {len(subset)} img | avg: {avg:.1f}% | min: {min(sevs):.1f}% | max: {max(sevs):.1f}%")
 
-    print("=" * 70)
 
 
 if __name__ == "__main__":

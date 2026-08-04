@@ -1,15 +1,3 @@
-"""
-tsne_viz.py — Vizualizare t-SNE a embedding-urilor MedSigLIP v13
-
-Genereaza 3 grafice din spatiul embedding al modelului:
-  1. tsne_by_disease.png     — cluster-e colorate pe clasa de boala
-  2. tsne_by_severity.png    — gradient de culoare pe scorul de severitate
-  3. tsne_predictions.png    — true vs predicted, cu erorile marcate
-
-Rulare:
-    python src/evaluation/tsne_viz.py
-"""
-
 import gc
 import os
 import sys
@@ -34,32 +22,31 @@ from src.utils.seed import set_seed
 
 class Config:
     model_path = "models/medsiglip-448"
-    ckpt_path  = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
+    ckpt_path = "experiments/medsiglip_v15/ckpts/final_with_probe.pth"
 
-    test_csv   = "data/oct5k/splits_v3/test.csv"
+    test_csv = "data/oct5k/splits_v3/test.csv"
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
-    sev_json   = "data/oct5k/severity_scores_v2.json"
+    sev_json = "data/oct5k/severity_scores_v2.json"
 
-    fig_dir    = "experiments/figures/tsne_v13"
+    fig_dir = "experiments/figures/tsne_v13"
 
     batch_size = 8
-    workers    = 0
-    device     = "cuda" if torch.cuda.is_available() else "cpu"
-    use_amp    = torch.cuda.is_available()
+    workers = 0
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    use_amp = torch.cuda.is_available()
 
     tsne_perplexity = 30
-    tsne_max_iter   = 1000
+    tsne_max_iter = 1000
 
 
 cfg = Config()
 os.makedirs(cfg.fig_dir, exist_ok=True)
 
 # Culori si markere constante per clasa — folosite in toate graficele
-CLS_COLORS  = {"AMD": "#e74c3c", "DME": "#3498db", "DRUSEN": "#f39c12", "NORMAL": "#2ecc71"}
-CLS_MARKERS = {"AMD": "o",       "DME": "s",       "DRUSEN": "^",       "NORMAL": "D"}
+CLS_COLORS = {"AMD": "#e74c3c", "DME": "#3498db", "DRUSEN": "#f39c12", "NORMAL": "#2ecc71"}
+CLS_MARKERS = {"AMD": "o", "DME": "s", "DRUSEN": "^", "NORMAL": "D"}
 
 
-# MODEL LOADING
 
 def _detect_cls_hidden(state_dict: dict) -> int:
     """
@@ -74,11 +61,13 @@ def _detect_cls_hidden(state_dict: dict) -> int:
 
 
 def load_model(ckpt_path: str) -> tuple[MedSigLIPMultiTask, list[str]]:
-    ckpt       = torch.load(ckpt_path, map_location="cpu", weights_only=False)
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     state_dict = ckpt.get("model", ckpt)
 
-    n_classes  = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
-    classes    = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
+    n_classes = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME",
+                                                                                                      "DRUSEN",
+                                                                                                      "NORMAL"]
     cls_hidden = _detect_cls_hidden(state_dict)
 
     print(f"  cls_head hidden_dim detectat: {cls_hidden}")
@@ -100,7 +89,7 @@ def extract_embeddings(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
     - severitatea adevarata si prezisa
     """
     all_embs, all_labels, all_sev_true = [], [], []
-    all_sev_pred, all_cls_pred         = [], []
+    all_sev_pred, all_cls_pred = [], []
 
     for batch in tqdm(loader, desc="  Extracting embeddings"):
         pv = batch["pixel_values"].to(cfg.device)
@@ -108,8 +97,8 @@ def extract_embeddings(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
         with autocast(cfg.device, enabled=cfg.use_amp):
             # encode_image returneaza features brute — normalizam pt embedding space
             image_pooled = model.encode_image(pv)
-            sev_pred     = model.severity_head(image_pooled).squeeze(-1).clamp(0, 1)
-            cls_pred     = model.classification_head(image_pooled).argmax(1)
+            sev_pred = model.severity_head(image_pooled).squeeze(-1).clamp(0, 1)
+            cls_pred = model.classification_head(image_pooled).argmax(1)
 
         all_embs.append(image_pooled.cpu().numpy())
         all_labels.append(batch["label"].numpy())
@@ -120,8 +109,8 @@ def extract_embeddings(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
     _free_mem()
 
     return {
-        "emb":      np.concatenate(all_embs),
-        "labels":   np.concatenate(all_labels),
+        "emb": np.concatenate(all_embs),
+        "labels": np.concatenate(all_labels),
         "sev_true": np.concatenate(all_sev_true),
         "sev_pred": np.concatenate(all_sev_pred),
         "cls_pred": np.concatenate(all_cls_pred),
@@ -182,14 +171,14 @@ def plot_by_severity(pts: np.ndarray, sev: np.ndarray, labels: np.ndarray, class
 def plot_predictions(pts: np.ndarray, labels: np.ndarray, preds: np.ndarray, classes: list) -> None:
     """True labels vs predicted labels — erorile marcate cu cerc negru."""
     fig, axes = plt.subplots(1, 2, figsize=(18, 8))
-    palette   = [CLS_COLORS.get(c, "#999") for c in classes]
+    palette = [CLS_COLORS.get(c, "#999") for c in classes]
 
     for ax, data, title in [(axes[0], labels, "True Labels"), (axes[1], preds, "Predicted Labels")]:
         for i, name in enumerate(classes):
             mask = data == i
             ax.scatter(pts[mask, 0], pts[mask, 1], c=palette[i], label=name,
                        alpha=0.6, s=30, edgecolors="white", linewidth=0.3)
-        ax.set(title=f"MedSigLIP v13 — {title}", xlabel="t-SNE dim 1", ylabel="t-SNE dim 2")
+        ax.set(title=f"MedSigLIP v15 — {title}", xlabel="t-SNE dim 1", ylabel="t-SNE dim 2")
         ax.legend(fontsize=11)
         ax.grid(alpha=0.2)
 
@@ -210,9 +199,6 @@ def _save(fig: plt.Figure, filename: str) -> None:
     plt.close(fig)
     print(f"  Saved: {path}")
 
-
-# UTILITARE
-
 def _free_mem() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -227,12 +213,9 @@ def _print_cluster_stats(pts: np.ndarray, labels: np.ndarray, classes: list) -> 
         if mask.sum() < 2:
             continue
         cluster = pts[mask]
-        center  = cluster.mean(axis=0)
-        spread  = np.sqrt(((cluster - center) ** 2).sum(axis=1).mean())
+        center = cluster.mean(axis=0)
+        spread = np.sqrt(((cluster - center) ** 2).sum(axis=1).mean())
         print(f"    {name}: {mask.sum()} pts, spread={spread:.1f}")
-
-
-# MAIN
 
 def main():
     set_seed()
@@ -240,7 +223,7 @@ def main():
     print("  t-SNE VISUALIZATION — MedSigLIP v13 Embeddings")
     print(f"  Checkpoint: {cfg.ckpt_path}")
 
-    processor      = AutoProcessor.from_pretrained(cfg.model_path)
+    processor = AutoProcessor.from_pretrained(cfg.model_path)
     model, classes = load_model(cfg.ckpt_path)
 
     ds = OCT5kDataset(

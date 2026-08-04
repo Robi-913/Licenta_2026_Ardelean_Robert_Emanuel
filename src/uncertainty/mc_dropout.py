@@ -1,29 +1,19 @@
-"""
-Metrici:
-    - Mean confidence: cat de sigur e modelul in medie
-    - Predictive entropy: cat de "imprastiate" sunt predictiile
-    - Mutual information: cat de mult conteaza dropout-ul
-    - Accuracy vs Uncertainty: modelul greseste mai mult cand e incert?
-"""
-
+import gc
+import json
 import os
 import sys
-import json
-import gc
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.amp import autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import AutoModel, AutoProcessor
-from peft import LoraConfig, get_peft_model  # Adaugat pentru LoRA
+from transformers import AutoProcessor
+from peft import LoraConfig, get_peft_model
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -31,8 +21,6 @@ from src.utils.seed import set_seed
 from src.model.medsiglip import MedSigLIPMultiTask
 from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
-
-# ---------- config ----------
 
 class Config:
     model_path = "models/medsiglip-448"
@@ -45,7 +33,7 @@ class Config:
     fig_dir = "experiments/figures/uncertainty_v13"
     out_json = "experiments/uncertainty_v13_results.json"
 
-    mc_passes = 20
+    mc_passes = 20  # cate forward passes per imagine (mai multe = estimare mai stabila, dar mai lent)
     bs = 8
     workers = 0
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -56,37 +44,56 @@ cfg = Config()
 os.makedirs(cfg.fig_dir, exist_ok=True)
 
 
-# ---------- helper detecție probe ----------
-
 def clear_mem():
-    """Clears RAM and VRAM to prevent out-of-memory errors."""
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+
 def _detect_cls_head(state_dict):
     for k, v in state_dict.items():
-        # Verificăm intrarea în primul strat liniar din capul de clasificare
         if k == "cls_head.1.weight" or k == "cls_head.1.bias":
             return v.shape[0] if len(v.shape) > 1 else v.shape[0]
     return 256
 
-# ---------- mc dropout ----------
+
 
 def turn_on_dropout(model):
-    # Această metodă va prinde inclusiv dropout-ul din modulele lora
+    """
+    Truc-ul cheie al MC Dropout:
+    Modelul e in eval() (batch norm si alte layere sunt fixe),
+    dar DOAR dropout-urile sunt fortate inapoi in train().
+
+    Normal la inferenta, dropout e dezactivat (toate neuronele active).
+    Aici il RE-ACTIVAM => la fiecare forward pass, neuroni diferiti
+    sunt "stinsi" random => output-uri usor diferite de fiecare data.
+
+    Variabilitatea intre cele 20 de output-uri = incertitudinea modelului.
+    Daca toate 20 zic "AMD cu 98%", modelul e sigur.
+    Daca 12 zic AMD, 5 zic DME, 3 zic DRUSEN, modelul e nesigur.
+    """
     for m in model.modules():
         if isinstance(m, nn.Dropout):
-            m.train()
+            m.train()  # doar dropout-urile trec in train mode
+
 
 def mc_predict(model, pv, n):
+    """
+    Ruleaza N forward passes cu dropout activ pe aceleasi imagini.
+
+    Returneaza:
+      - probs_all: (N, batch, 4) — probabilitati softmax per pass
+      - sevs_all:  (N, batch) — severitate per pass
+    """
     model.eval()
-    turn_on_dropout(model)
+    turn_on_dropout(model)  # eval() dar cu dropout ON
 
     probs_all = []
     sevs_all = []
 
     for _ in range(n):
+        # torch.no_grad() pt ca NU antrenam — doar colectam predictii
+        # Fiecare iteratie da rezultate usor diferite din cauza dropout-ului
         with torch.no_grad(), autocast(cfg.device, enabled=cfg.amp):
             emb = model.encode_image(pv)
             logits = model.classification_head(emb)
@@ -95,25 +102,41 @@ def mc_predict(model, pv, n):
         probs_all.append(torch.softmax(logits, dim=1).cpu())
         sevs_all.append(sp.cpu())
 
+    # Stack: lista de N tensori -> un singur tensor cu N pe prima dimensiune
     return torch.stack(probs_all), torch.stack(sevs_all)
 
 
 def calc_uncertainty(mc_probs, mc_sevs):
-    mean_p = mc_probs.mean(dim=0)
-    mean_s = mc_sevs.mean(dim=0)
+    """
+    Din cele N=20 predictii, calculeaza metrici de incertitudine:
 
-    pred = mean_p.argmax(dim=1)
-    conf = mean_p.max(dim=1).values
+    mc_probs: (20, batch, 4) — 20 distributii de probabilitate per imagine
+    mc_sevs:  (20, batch) — 20 scoruri de severitate per imagine
+    """
+    # Media peste cele 20 de passes => probabilitatea "consensuala"
+    mean_p = mc_probs.mean(dim=0)   # (batch, 4)
+    mean_s = mc_sevs.mean(dim=0)    # (batch,)
 
+    pred = mean_p.argmax(dim=1)           # clasa cu prob medie maxima
+    conf = mean_p.max(dim=1).values       # confidence = probabilitatea maxima
+
+    # PREDICTIVE ENTROPY — masoara cat de "imprastiata" e distributia medie
+    # Daca mean_p = [0.97, 0.01, 0.01, 0.01] => entropy mica (sigur)
+    # Daca mean_p = [0.25, 0.25, 0.25, 0.25] => entropy maxima (nesigur)
     ent = -(mean_p * torch.log(mean_p + 1e-10)).sum(dim=1)
 
+    # SEVERITY STD — cat de mult variaza severitatea intre cele 20 de passes
+    # Std mare = modelul nu e sigur pe severitate
     s_std = mc_sevs.std(dim=0)
 
+    # CLS STD — deviatia standard a probabilitatii clasei prezise
+    # Extragem probabilitatea clasei castigatoare din fiecare din cele 20 de passes
+    # si calculam cat de mult variaza
     pred_probs = torch.gather(
         mc_probs, 2,
         pred.unsqueeze(0).unsqueeze(2).expand(mc_probs.shape[0], -1, 1),
-    ).squeeze(2)
-    c_std = pred_probs.std(dim=0)
+    ).squeeze(2)  # (20, batch) — prob clasei prezise in fiecare pass
+    c_std = pred_probs.std(dim=0)  # (batch,) — variabilitate per imagine
 
     return {
         "pred_class": pred.numpy(),
@@ -125,22 +148,17 @@ def calc_uncertainty(mc_probs, mc_sevs):
     }
 
 
-# ---------- main ----------
-
 def main():
     set_seed()
 
-    print(f"{'=' * 70}")
     print(f"  UNCERTAINTY ESTIMATION - Monte Carlo Dropout (v13)")
     print(f"  MC samples: {cfg.mc_passes} forward passes per image")
-    print(f"{'=' * 70}")
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
 
     ckpt = torch.load(cfg.ckpt_path, map_location="cpu", weights_only=False)
     state_dict = ckpt.get("model", ckpt)
 
-    # Remapping chei vechi -> noi
     remapped = {
         k.replace("sev_head.", "severity_head.")
         .replace("cls_head.", "classification_head.")
@@ -175,6 +193,7 @@ def main():
     loader = DataLoader(ds, batch_size=cfg.bs, shuffle=False,
                         num_workers=cfg.workers, collate_fn=collate_oct5k)
 
+    # Colectam rezultatele per imagine din toate batch-urile
     collected = {
         "pred_class": [], "true_class": [], "confidence": [],
         "entropy": [], "cls_std": [], "sev_mean": [], "sev_std": [],
@@ -186,7 +205,9 @@ def main():
         lbls = batch["label"].numpy()
         st = batch["severity"].numpy() * 100
 
+        # Ruleaza 20 forward passes cu dropout activ
         mc_p, mc_s = mc_predict(model, pv, cfg.mc_passes)
+        # Calculeaza metrici de incertitudine din cele 20 de predictii
         unc = calc_uncertainty(mc_p, mc_s)
 
         collected["pred_class"].extend(unc["pred_class"])
@@ -212,14 +233,10 @@ def main():
     c_std = collected["cls_std"]
     s_std = collected["sev_std"]
 
-    hit = pred == true
+    hit = pred == true  # masca booleana: True = predictie corecta
     acc = hit.mean() * 100
 
-    # ---------- stats ----------
-
-    print(f"\n{'─' * 50}")
     print(f"  RESULTS:")
-    print(f"{'─' * 50}")
     print(f"  Total images: {len(pred)}")
     print(f"  Accuracy: {acc:.1f}%")
     print(f"  Mean confidence: {conf.mean() * 100:.1f}%")
@@ -250,10 +267,9 @@ def main():
                 f"sev_std={s_std[mask].mean():.1f}%"
             )
 
-    # ---------- plot 1: confidence + entropy ----------
-
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
+    # Stanga sus: distributia confidence-ului — verde=corect, rosu=incorect
     axes[0, 0].hist(conf[hit] * 100, bins=30, alpha=0.7, color="green", label="Correct", density=True)
     if (~hit).sum() > 0:
         axes[0, 0].hist(conf[~hit] * 100, bins=30, alpha=0.7, color="red", label="Incorrect", density=True)
@@ -263,6 +279,7 @@ def main():
     axes[0, 0].legend()
     axes[0, 0].grid(alpha=0.3)
 
+    # Dreapta sus: predictive entropy — corect ar trebui sa aiba entropy mica
     axes[0, 1].hist(ent[hit], bins=30, alpha=0.7, color="green", label="Correct", density=True)
     if (~hit).sum() > 0:
         axes[0, 1].hist(ent[~hit], bins=30, alpha=0.7, color="red", label="Incorrect", density=True)
@@ -271,6 +288,7 @@ def main():
     axes[0, 1].legend()
     axes[0, 1].grid(alpha=0.3)
 
+    # Stanga jos: boxplot confidence per clasa
     box_data = [conf[true == i] * 100 for i in range(len(classes))]
     bp = axes[1, 0].boxplot(box_data, labels=classes, patch_artist=True)
     box_colors = ["#e74c3c", "#3498db", "#f39c12", "#2ecc71"]
@@ -281,6 +299,7 @@ def main():
     axes[1, 0].set_ylabel("Confidence %")
     axes[1, 0].grid(alpha=0.3)
 
+    # Dreapta jos: scatter severitate medie vs incertitudine severitate
     sc = axes[1, 1].scatter(
         collected["sev_mean"], s_std,
         alpha=0.4, s=15, c=conf, cmap="RdYlGn",
@@ -301,19 +320,29 @@ def main():
     plt.close()
     print(f"\n  Plot: {cfg.fig_dir}/uncertainty_analysis.png")
 
-    # ---------- plot 2: calibration ----------
+
+    # Reliability diagram: compara confidence-ul modelului cu accuracy reala.
+    # Daca modelul e bine calibrat, barele ar trebui sa fie pe diagonala.
+    # Sub diagonala = supraincredere (zice 90% dar nimereste 60%)
+    # Deasupra diagonalei = subincredere (zice 60% dar nimereste 90%)
 
     fig, ax = plt.subplots(figsize=(8, 8))
 
+    # Impartim confidence-ul in 10 bin-uri: [0-0.1], [0.1-0.2], ..., [0.9-1.0]
     n_bins = 10
-    edges = np.linspace(0, 1, n_bins + 1)
+    edges = np.linspace(0, 1, n_bins + 1)  # [0.0, 0.1, 0.2, ..., 1.0]
     bin_acc, bin_conf, bin_n = [], [], []
 
     for i in range(n_bins):
+        # mask = imaginile cu confidence in bin-ul curent
+        # ex: bin 8 = imaginile cu confidence intre 0.8 si 0.9
         mask = (conf >= edges[i]) & (conf < edges[i + 1])
         if mask.sum() > 0:
+            # accuracy reala in acest bin: din imaginile cu conf 80-90%, cate sunt corecte?
             bin_acc.append(hit[mask].mean())
+            # confidence medie in bin: media confidence-urilor din acest interval
             bin_conf.append(conf[mask].mean())
+            # cate imagini sunt in bin
             bin_n.append(mask.sum())
         else:
             bin_acc.append(0)
@@ -323,7 +352,9 @@ def main():
     bin_acc = np.array(bin_acc)
     bin_conf = np.array(bin_conf)
 
+    # Barele: pe X = confidence medie din bin, pe Y = accuracy reala din bin
     ax.bar(bin_conf, bin_acc, width=0.08, alpha=0.7, color="#3498db", label="Model")
+    # Diagonala = calibrare perfecta (conf 80% => acc 80%)
     ax.plot([0, 1], [0, 1], "r--", label="Perfect calibration")
     ax.set_xlabel("Mean Predicted Confidence")
     ax.set_ylabel("Fraction of Correct Predictions")
@@ -333,12 +364,26 @@ def main():
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
 
+    # ECE = SUM_per_bin( (nr_imagini_in_bin / total) * |accuracy_bin - confidence_bin| )
+    #
+    # Pentru fiecare bin:
+    #   - calculam diferenta absoluta intre accuracy reala si confidence medie
+    #   - ponderata cu proportia de imagini din acel bin (bin-urile cu mai multe imagini conteaza mai mult)
+    #
+    # Exemplu cu bin-ul 0.9-1.0:
+    #   - 300 imagini au confidence 90-100%
+    #   - din ele, doar 200 sunt corecte => accuracy = 66.7%
+    #   - confidence medie = 95%
+    #   - gap = |66.7% - 95%| = 28.3%
+    #   - contribuie la ECE: (300/total) * 28.3%
+    #
     total_n = sum(bin_n)
     ece = sum(
         (cnt / total_n) * abs(a - c)
         for cnt, a, c in zip(bin_n, bin_acc, bin_conf)
         if cnt > 0
     )
+
     ax.text(
         0.05, 0.9, f"ECE = {ece:.4f}", fontsize=14,
         transform=ax.transAxes,
@@ -349,8 +394,6 @@ def main():
     plt.savefig(f"{cfg.fig_dir}/calibration_diagram.png", dpi=200)
     plt.close()
     print(f"  Plot: {cfg.fig_dir}/calibration_diagram.png")
-
-    # ---------- save ----------
 
     summary = {
         "mc_samples": cfg.mc_passes,
@@ -382,10 +425,8 @@ def main():
 
     print(f"  Results: {cfg.out_json}")
 
-    print(f"\n{'=' * 70}")
     print(f"  UNCERTAINTY ESTIMATION COMPLETE")
     print(f"  Accuracy: {acc:.1f}% | Confidence: {conf.mean() * 100:.1f}% | ECE: {ece:.4f}")
-    print(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

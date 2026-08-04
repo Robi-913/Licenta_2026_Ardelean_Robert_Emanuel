@@ -1,6 +1,4 @@
 """
-Severity Scoring v2 - MedGemma verifica si corecteaza YOLO
-
 Logica fluxului:
   - Doctor -> Calcul determinist direct bazat pe adnotarile sigure (ground truth).
   - YOLO   -> MedGemma primeste predictiile YOLO, verifica imaginea, modifica numarul de leziuni, apoi se face calculul determinist pe lista corectata.
@@ -10,7 +8,6 @@ Logica fluxului:
 import gc
 import json
 import math
-import os
 import random
 import re
 from collections import Counter, defaultdict
@@ -26,49 +23,45 @@ from transformers import (
 )
 
 
-# CONFIGURARI
-
 class Config:
     model_path = "model/medgemma-27b-it"
     load_in_4bit = True
 
     master_json = "data/oct5k/metadata_v2/_master.json"
-    out_json    = "data/oct5k/severity_scores_v2.json"
+    out_json = "data/oct5k/severity_scores_v2.json"
 
-    max_tokens    = 256
-    retries       = 2 # Cate incercari dam modelului daca nu respecta formatul
+    max_tokens = 256
+    retries = 2  # Cate incercari dam modelului daca nu respecta formatul
     save_interval = 50
-    resume        = True
-    device        = "cuda" if torch.cuda.is_available() else "cpu"
+    resume = True
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 cfg = Config()
 
-
-# GREUTATI BIOMARKERI & LOGICA DE SCOR
-
 # Importanta fiecarei leziuni individuale adaugata la scorul de severitate
 BIOMARKER_WEIGHTS = {
-    "Fluid":                 0.30,
-    "Geographicatrophy":     0.25,
-    "PRlayerdisruption":     0.20,
-    "SoftdrusenPED":         0.12,
-    "Reticulardrusen":       0.07,
+    "Fluid": 0.30,
+    "Geographicatrophy": 0.25,
+    "PRlayerdisruption": 0.20,
+    "SoftdrusenPED": 0.12,
+    "Reticulardrusen": 0.07,
     "Hyperfluorescentspots": 0.06,
-    "Softdrusen":            0.04,
-    "Harddrusen":            0.02,
-    "Choroidalfolds":        0.01,
+    "Softdrusen": 0.04,
+    "Harddrusen": 0.02,
+    "Choroidalfolds": 0.01,
 }
 
 # Un scor minim garantat doar pentru simplul fapt ca ochiul are o anumita boala
 DISEASE_BASE_SCORE = {
-    "AMD":    0.15,
-    "DME":    0.20,
+    "AMD": 0.15,
+    "DME": 0.20,
     "DRUSEN": 0.10,
     "NORMAL": 0.02,
 }
 
-AREA_WEIGHT         = 0.05
-COUNT_WEIGHT        = 0.15
+AREA_WEIGHT = 0.05
+COUNT_WEIGHT = 0.15
 MAX_BIOMARKER_COUNT = 4
 
 
@@ -84,6 +77,7 @@ def _count_bonus(n):
 def normalize_class(cls):
     # Transforma "Hard Drusen", "hard_drusen" si "Harddrusen" in aceeasi cheie pentru a nu rata potriviri
     return cls.lower().replace(" ", "").replace("_", "")
+
 
 # Un dictionar de mapare inversa (ex: 'harddrusen' -> 'Harddrusen')
 BIOMARKER_KEYS_NORMALIZED = {normalize_class(k): k for k in BIOMARKER_WEIGHTS}
@@ -110,7 +104,7 @@ def compute_deterministic(biomarker_list, disease, area_pct=0.0):
         biomarker_score += weight
 
     counts = Counter(biomarker_list)
-    area_score  = (area_pct / 100.0) * AREA_WEIGHT
+    area_score = (area_pct / 100.0) * AREA_WEIGHT
     count_score = _count_bonus(len(biomarker_list))
 
     raw = base + biomarker_score + area_score + count_score
@@ -118,21 +112,21 @@ def compute_deterministic(biomarker_list, disease, area_pct=0.0):
     sev = round(min(100.0, max(0.0, raw * 100)), 1)
 
     return sev, {
-        "base_score":       round(base * 100, 1),
-        "biomarker_score":  round(biomarker_score * 100, 1),
-        "area_score":       round(area_score * 100, 1),
-        "count_bonus":      round(count_score * 100, 1),
+        "base_score": round(base * 100, 1),
+        "biomarker_score": round(biomarker_score * 100, 1),
+        "area_score": round(area_score * 100, 1),
+        "count_bonus": round(count_score * 100, 1),
         "biomarker_counts": dict(counts),
-        "total_instances":  len(biomarker_list),
+        "total_instances": len(biomarker_list),
     }
 
-# INTERACTIUNEA CU MEDGEMMA
 
 IMG_DIRS = [
     "data/OCT5k/Images/Images_Automatic",
     "data/OCT5k/Images/Images_Manual",
     "data/OCT5k/Detection/Images",
 ]
+
 
 def locate_image(meta):
     disk = meta.get("image_disk_path", "")
@@ -163,7 +157,7 @@ def load_model():
     )
 
     proc = AutoProcessor.from_pretrained(cfg.model_path)
-    mdl  = AutoModelForImageTextToText.from_pretrained(
+    mdl = AutoModelForImageTextToText.from_pretrained(
         cfg.model_path,
         quantization_config=quant_cfg,
         device_map="auto",
@@ -175,15 +169,11 @@ def load_model():
     mdl.eval()
 
     if torch.cuda.is_available():
-        used  = torch.cuda.memory_allocated() / 1024 ** 3
+        used = torch.cuda.memory_allocated() / 1024 ** 3
         total = torch.cuda.get_device_properties(0).total_memory / 1024 ** 3
         print(f"  VRAM: {used:.1f}GB / {total:.1f}GB")
     print("  Loaded!\n")
     return mdl, proc
-
-
-
-# PROMPT-URI PENTRU AI
 
 
 SEVERITY_PROMPT = """\
@@ -220,13 +210,12 @@ An automated YOLO detector found these biomarkers (verify and correct the counts
 Please check each one: confirm, correct the count, remove false positives, and add any biomarkers YOLO missed.
 """
 
+
 def format_yolo_hints(lesions):
     # Formateaza predictiile brute YOLO intr-un string citibil pt prompt
     counts = Counter(l["class"] for l in lesions)
     return ", ".join(f"{bm} x{n}" for bm, n in counts.most_common())
 
-
-# PARSARE & EXECUTIE AI
 
 @torch.no_grad()
 def call_medgemma(mdl, proc, image, disease, yolo_hints_str=None, extra=""):
@@ -277,12 +266,12 @@ def call_medgemma(mdl, proc, image, disease, yolo_hints_str=None, extra=""):
 def parse_medgemma_response(response, disease):
     # Extrage componentele utile din textul generat de AI
     sev_from_text = None
-    present_line  = ""
-    reasoning     = ""
+    present_line = ""
+    reasoning = ""
 
     for line in response.split("\n"):
         line = line.strip()
-        low  = line.lower()
+        low = line.lower()
 
         if low.startswith("severity:"):
             m = re.search(r"(\d+(?:\.\d+)?)\s*%", line)
@@ -303,10 +292,10 @@ def parse_medgemma_response(response, disease):
             m = re.match(r"(.+?)\s*x\s*(\d+)", part, re.IGNORECASE)
             if m:
                 bm_text = m.group(1).strip()
-                count   = int(m.group(2))
+                count = int(m.group(2))
             else:
                 bm_text = part
-                count   = 1
+                count = 1
 
             # Mapeaza pe numele oficial ca sa nu existe greseli de scriere
             key = BIOMARKER_KEYS_NORMALIZED.get(normalize_class(bm_text))
@@ -342,8 +331,6 @@ def score_with_medgemma(mdl, proc, image, disease, yolo_hints_str=None):
     return [], "parse_failed", None, False, ["parse_failed"]
 
 
-# CONTROLER PRINCIPAL DE PIPELINE
-
 def save_out(data):
     out = Path(cfg.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -362,19 +349,19 @@ def run_all(metadata):
 
     results = list(prev.values())
     done_det = 0
-    done_mg  = 0
-    n_err    = 0
+    done_mg = 0
+    n_err = 0
 
     # Impartim pozele pe categorii de sursa pt a sti cum le tratam
     doctor_bbox = [m for m in metadata if m.get("bbox_source") == "doctor"]
-    yolo_bbox   = [m for m in metadata if m.get("bbox_source") == "yolo"]
-    no_bbox     = [m for m in metadata if m.get("bbox_source") == "none" or not m.get("bbox_source")]
+    yolo_bbox = [m for m in metadata if m.get("bbox_source") == "yolo"]
+    no_bbox = [m for m in metadata if m.get("bbox_source") == "none" or not m.get("bbox_source")]
 
     print(f"  doctor (deterministic):  {len(doctor_bbox)}")
     print(f"  yolo (MedGemma verify):  {len(yolo_bbox)}")
     print(f"  none (MedGemma direct):  {len(no_bbox)}")
 
-    # ---- PASUL 1: Doctor -> Scorul este strict matematic (Fara AI) ----
+    # PASUL 1: Doctor -> Scorul este strict matematic
     print("\n  [1/2] Doctor bbox - deterministic...")
     for meta in tqdm(doctor_bbox, desc="  Doctor"):
         path = meta["image_path"]
@@ -393,18 +380,18 @@ def run_all(metadata):
         )
 
         results.append({
-            "image_path":       path,
+            "image_path": path,
             "disease_category": meta["disease_category"],
             "severity_percent": sev,
-            "severity_level":   get_level(sev),
-            "severity_valid":   True,
-            "severity_method":  "deterministic_doctor",
-            "severity_issues":  [],
-            "breakdown":        breakdown,
+            "severity_level": get_level(sev),
+            "severity_valid": True,
+            "severity_method": "deterministic_doctor",
+            "severity_issues": [],
+            "breakdown": breakdown,
         })
         done_det += 1
 
-    # ---- PASUL 2: YOLO si Cele Fara Cutii -> Intervine AI-ul ----
+    # PASUL 2: YOLO si Cele Fara Cutii -> Intervine MedGemma
     needs_mg = [m for m in (yolo_bbox + no_bbox) if m["image_path"] not in prev]
 
     if not needs_mg:
@@ -414,7 +401,7 @@ def run_all(metadata):
         mdl, proc = load_model()
 
         for meta in tqdm(needs_mg, desc="  MedGemma"):
-            path    = meta["image_path"]
+            path = meta["image_path"]
             disease = meta["disease_category"]
 
             if path in prev:
@@ -424,14 +411,14 @@ def run_all(metadata):
             if disease.upper() == "NORMAL":
                 sev = round(random.uniform(0, 8), 1)
                 results.append({
-                    "image_path":       path,
+                    "image_path": path,
                     "disease_category": disease,
                     "severity_percent": sev,
-                    "severity_level":   get_level(sev),
-                    "severity_valid":   True,
-                    "severity_method":  "hardcoded_normal",
-                    "severity_issues":  [],
-                    "breakdown":        {"base_score": sev, "biomarker_counts": {}, "total_instances": 0},
+                    "severity_level": get_level(sev),
+                    "severity_valid": True,
+                    "severity_method": "hardcoded_normal",
+                    "severity_issues": [],
+                    "breakdown": {"base_score": sev, "biomarker_counts": {}, "total_instances": 0},
                 })
                 continue
 
@@ -458,14 +445,14 @@ def run_all(metadata):
                 continue
 
             # Pregateste hint-urile YOLO pt prompt (Daca exista)
-            lesions  = meta.get("lesions", [])
+            lesions = meta.get("lesions", [])
             bbox_src = meta.get("bbox_source", "none")
 
             yolo_hints_str = None
-            yolo_counts    = {}
+            yolo_counts = {}
             if lesions and bbox_src == "yolo":
                 yolo_hints_str = format_yolo_hints(lesions)
-                yolo_counts    = dict(Counter(l["class"] for l in lesions))
+                yolo_counts = dict(Counter(l["class"] for l in lesions))
 
             # Rularea efectiva a retelei MedGemma
             expanded, reasoning, sev_raw, ok, issues = score_with_medgemma(
@@ -475,7 +462,7 @@ def run_all(metadata):
             if not ok:
                 n_err += 1
 
-            # Acum ca MedGemma a scuipat lista corecta de leziuni, putem rula scorul matematic pe ele
+            # Acum ca MedGemma a dat lista corecta de leziuni, putem rula scorul matematic pe ele
             if expanded:
                 sev, breakdown = compute_deterministic(
                     expanded, disease,
@@ -495,24 +482,24 @@ def run_all(metadata):
 
             # Impachetam rezultatul imaginii curente
             entry = {
-                "image_path":       path,
+                "image_path": path,
                 "disease_category": disease,
                 "severity_percent": round(sev, 1) if sev else None,
-                "severity_level":   get_level(sev) if sev else None,
-                "severity_valid":   ok,
-                "severity_method":  method,
-                "severity_issues":  issues,
-                "reasoning":        reasoning,
-                "medgemma_counts":  mg_counts,
+                "severity_level": get_level(sev) if sev else None,
+                "severity_valid": ok,
+                "severity_method": method,
+                "severity_issues": issues,
+                "reasoning": reasoning,
+                "medgemma_counts": mg_counts,
             }
 
             # Pastram statistici despre cat a schimbat MedGemma fata de ce zicea YOLO initial
             if yolo_counts:
                 entry["yolo_counts"] = yolo_counts
-                entry["comparison"]  = {
-                    "yolo_total":          sum(yolo_counts.values()),
-                    "medgemma_total":      sum(mg_counts.values()),
-                    "added_by_medgemma":   list(set(mg_counts.keys()) - set(yolo_counts.keys())),
+                entry["comparison"] = {
+                    "yolo_total": sum(yolo_counts.values()),
+                    "medgemma_total": sum(mg_counts.values()),
+                    "added_by_medgemma": list(set(mg_counts.keys()) - set(yolo_counts.keys())),
                     "removed_by_medgemma": list(set(yolo_counts.keys()) - set(mg_counts.keys())),
                 }
 
@@ -530,17 +517,14 @@ def run_all(metadata):
     save_out(results)
     return results, done_det, done_mg, n_err
 
-# EXECUȚIE MAIN
 
 def main():
     random.seed(42)
 
-    print("=" * 70)
     print("  SEVERITY SCORING v2")
     print("  doctor: deterministic cu counts")
     print("  yolo:   MedGemma verifica + corecteaza counts -> deterministic")
     print("  none:   MedGemma detecteaza cu counts -> deterministic")
-    print("=" * 70)
 
     with open(cfg.master_json, "r", encoding="utf-8") as f:
         metadata = json.load(f)
@@ -549,7 +533,7 @@ def main():
     results, done_det, done_mg, n_err = run_all(metadata)
 
     # Statistici finale post-procesare
-    good  = [r for r in results if r.get("severity_valid") is True]
+    good = [r for r in results if r.get("severity_valid") is True]
     stats = defaultdict(list)
     method_counts = Counter(r.get("severity_method") for r in good)
 
@@ -566,20 +550,19 @@ def main():
     for cat in ["NORMAL", "DRUSEN", "AMD", "DME"]:
         sevs = stats.get(cat, [])
         if sevs:
-            print(f"  {cat}: {len(sevs)} | avg={sum(sevs)/len(sevs):.1f}% | "
+            print(f"  {cat}: {len(sevs)} | avg={sum(sevs) / len(sevs):.1f}% | "
                   f"min={min(sevs):.1f}% | max={max(sevs):.1f}%")
 
-    # Comparatie intre roboti: YOLO vs MedGemma
+    # Comparatie : YOLO vs MedGemma
     yolo_entries = [r for r in good if r.get("yolo_counts")]
     if yolo_entries:
-        n_added   = sum(len(r.get("comparison", {}).get("added_by_medgemma", [])) for r in yolo_entries)
+        n_added = sum(len(r.get("comparison", {}).get("added_by_medgemma", [])) for r in yolo_entries)
         n_removed = sum(len(r.get("comparison", {}).get("removed_by_medgemma", [])) for r in yolo_entries)
         print(f"\n  YOLO vs MedGemma comparison ({len(yolo_entries)} images):")
         print(f"    Biomarker types added by MedGemma:   {n_added}")
         print(f"    Biomarker types removed by MedGemma: {n_removed}")
 
     print(f"\n  Saved: {cfg.out_json}")
-    print("=" * 70)
 
 
 if __name__ == "__main__":

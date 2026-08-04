@@ -1,36 +1,19 @@
-
-"""
-Retrieval Demo - MedSigLIP v5/v13 (Updated with LoRA & Probe)
-
-Genereaza vizualizari de retrieval:
-  1. I2T Grid: imagine query -> top 3 texte gasite
-  2. T2I Grid: text query -> top 3 imagini gasite
-  3. Per-class R@1, R@5, R@10 breakdown
-  4. Similarity distribution histogram
-  5. Failure analysis
-
-Rulare:
-    python src/retrieval/retrieval_demo.py
-"""
-
-import os
-import sys
-import json
 import gc
+import json
+import os
 import random
+import sys
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.amp import autocast
 from torch.utils.data import DataLoader
 from PIL import Image, ImageFilter
 from tqdm import tqdm
-from transformers import AutoModel, AutoProcessor
+from transformers import AutoProcessor
 from peft import LoraConfig, get_peft_model  # Adaugat pentru LoRA
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -39,8 +22,6 @@ from src.utils.seed import set_seed
 from src.model.medsiglip import MedSigLIPMultiTask
 from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
 
-
-# ---------- config ----------
 
 class Config:
     model_path = "models/medsiglip-448"
@@ -65,7 +46,6 @@ class Config:
 cfg = Config()
 os.makedirs(cfg.output_dir, exist_ok=True)
 
-# ---------- helper pentru detecția probe-ului ----------
 
 def _detect_cls_head(state_dict):
     for k, v in state_dict.items():
@@ -73,13 +53,12 @@ def _detect_cls_head(state_dict):
             return v.shape[0] if len(v.shape) > 1 else v.shape[0]
     return 256
 
+
 def free_mem():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
 
-
-# ---------- extract all embeddings ----------
 
 @torch.no_grad()
 def extract_all(model, loader):
@@ -116,8 +95,6 @@ def extract_all(model, loader):
     }
 
 
-# ---------- retrieval metrics per class ----------
-
 def compute_retrieval_metrics(img_emb, txt_emb, labels, classes):
     sim = img_emb @ txt_emb.T
     n = sim.shape[0]
@@ -148,8 +125,6 @@ def compute_retrieval_metrics(img_emb, txt_emb, labels, classes):
 
     return results
 
-
-# ---------- plot 1: I2T grid ----------
 
 def plot_i2t_grid(dataset, img_emb, txt_emb, labels, classes):
     random.seed(42)
@@ -197,7 +172,7 @@ def plot_i2t_grid(dataset, img_emb, txt_emb, labels, classes):
             row_match = dataset.df.iloc[tid.item()]
             prompts_match = dataset.prompts[row_match["image_path"]]
 
-            match_text += f"#{rank+1} [{correct}] {match_cls} (sim={score.item():.3f})\n"
+            match_text += f"#{rank + 1} [{correct}] {match_cls} (sim={score.item():.3f})\n"
             match_text += f"  Structure: {prompts_match['a'][:80]}...\n"
             match_text += f"  Lesions: {prompts_match['b'][:80]}...\n\n"
 
@@ -213,8 +188,6 @@ def plot_i2t_grid(dataset, img_emb, txt_emb, labels, classes):
     plt.close()
     print(f"  Saved: {cfg.output_dir}/i2t_grid.png")
 
-
-# ---------- plot 2: T2I grid ----------
 
 def plot_t2i_grid(dataset, img_emb, txt_emb, labels, classes):
     random.seed(42)
@@ -272,7 +245,7 @@ def plot_t2i_grid(dataset, img_emb, txt_emb, labels, classes):
 
             color = "green" if match_cls == disease else "red"
             axes[i, rank + 1].set_title(
-                f"#{rank+1} {correct} {match_cls}\nsim={score.item():.3f}",
+                f"#{rank + 1} {correct} {match_cls}\nsim={score.item():.3f}",
                 fontsize=10, color=color,
             )
             axes[i, rank + 1].axis("off")
@@ -282,9 +255,6 @@ def plot_t2i_grid(dataset, img_emb, txt_emb, labels, classes):
     plt.savefig(f"{cfg.output_dir}/t2i_grid.png", dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved: {cfg.output_dir}/t2i_grid.png")
-
-
-# ---------- plot 3: per-class R@K ----------
 
 def plot_per_class_metrics(metrics, classes):
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -313,9 +283,6 @@ def plot_per_class_metrics(metrics, classes):
     plt.savefig(f"{cfg.output_dir}/retrieval_per_class.png", dpi=150)
     plt.close()
     print(f"  Saved: {cfg.output_dir}/retrieval_per_class.png")
-
-
-# ---------- plot 4: similarity distribution ----------
 
 def plot_similarity_dist(img_emb, txt_emb, labels):
     sim = img_emb @ txt_emb.T
@@ -347,9 +314,6 @@ def plot_similarity_dist(img_emb, txt_emb, labels):
     plt.savefig(f"{cfg.output_dir}/similarity_dist.png", dpi=150)
     plt.close()
     print(f"  Saved: {cfg.output_dir}/similarity_dist.png")
-
-
-# ---------- plot 5: failure cases ----------
 
 def plot_failures(dataset, img_emb, txt_emb, labels, classes):
     sim = img_emb @ txt_emb.T
@@ -401,10 +365,7 @@ def plot_failures(dataset, img_emb, txt_emb, labels, classes):
     plt.savefig(f"{cfg.output_dir}/failure_cases.png", dpi=150, bbox_inches="tight")
     plt.close()
     print(f"  Saved: {cfg.output_dir}/failure_cases.png")
-    print(f"  Total failures: {len(failures)}/{len(labels)} ({100*len(failures)/len(labels):.1f}%)")
-
-
-# ---------- main ----------
+    print(f"  Total failures: {len(failures)}/{len(labels)} ({100 * len(failures) / len(labels):.1f}%)")
 
 def main():
     set_seed()
@@ -429,7 +390,9 @@ def main():
     }
 
     nc = ckpt.get("num_classes", 4) if isinstance(ckpt, dict) else 4
-    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME", "DRUSEN", "NORMAL"]
+    classes = ckpt.get("classes", ["AMD", "DME", "DRUSEN", "NORMAL"]) if isinstance(ckpt, dict) else ["AMD", "DME",
+                                                                                                      "DRUSEN",
+                                                                                                      "NORMAL"]
 
     # Detecteaza formatul probe-ului folosind dictionarul remapat
     cls_hidden = _detect_cls_head(remapped)
@@ -482,9 +445,7 @@ def main():
         json.dump(metrics, f, indent=2, ensure_ascii=False)
     print(f"\n  Results: {cfg.results_json}")
 
-    print(f"\n{'=' * 60}")
     print(f"  Output: {cfg.output_dir}/")
-    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":

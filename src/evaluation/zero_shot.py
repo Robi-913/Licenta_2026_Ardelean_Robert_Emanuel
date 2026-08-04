@@ -1,6 +1,4 @@
 """
-zero_shot.py — Zero-Shot Evaluation MedSigLIP v13
-
 Disease classification — 4 setup-uri:
   [A] Single generic prompt
   [B] Prompt ensemble generic (3 variante)
@@ -10,9 +8,6 @@ Disease classification — 4 setup-uri:
 Biomarker detection:
   [2] Zero-shot pos/neg text (all bbox + doctor-only)
   [3] Trained heads v5 (all bbox + doctor-only)
-
-Rulare:
-    python src/evaluation/zero_shot.py
 """
 
 import gc
@@ -66,12 +61,11 @@ cfg = Config()
 
 CLASSES = ["AMD", "DME", "DRUSEN", "NORMAL"]
 
-
 # DISEASE PROMPTS — 4 setup-uri
 
 DISEASE_SINGLE = {
-    "AMD":    "age-related macular degeneration retinal OCT scan",
-    "DME":    "diabetic macular edema retinal OCT scan",
+    "AMD": "age-related macular degeneration retinal OCT scan",
+    "DME": "diabetic macular edema retinal OCT scan",
     "DRUSEN": "drusen deposits retinal OCT scan",
     "NORMAL": "normal healthy retina OCT scan",
 }
@@ -100,15 +94,15 @@ DISEASE_ENSEMBLE = {
 }
 
 DISEASE_STRUCT = {
-    "AMD":    "Retinal layer irregularities with localized thickening and thinning and altered retinal morphology",
-    "DME":    "Retinal thickening with fluid related structural distortion and edema",
+    "AMD": "Retinal layer irregularities with localized thickening and thinning and altered retinal morphology",
+    "DME": "Retinal thickening with fluid related structural distortion and edema",
     "DRUSEN": "Retinal layer irregularities with localized drusen related thickening beneath the RPE",
     "NORMAL": "Preserved retinal layer organization with normal retinal morphology",
 }
 
 DISEASE_PATHO = {
-    "AMD":    "Geographic atrophy and drusen deposits characteristic of age related macular degeneration",
-    "DME":    "Intraretinal fluid and diabetic macular edema with retinal thickening",
+    "AMD": "Geographic atrophy and drusen deposits characteristic of age related macular degeneration",
+    "DME": "Intraretinal fluid and diabetic macular edema with retinal thickening",
     "DRUSEN": "Soft and hard drusen deposits beneath the retinal pigment epithelium without advanced AMD",
     "NORMAL": "No pathological biomarkers detected and no drusen or fluid present",
 }
@@ -159,21 +153,25 @@ DISEASE_PATHO_ENS = {
     ],
 }
 
-
 # BIOMARKER PROMPTS
 
 # Fiecare biomarker are un prompt pozitiv si unul negativ
 # Clasificam prin compararea similaritatii cu pozitivul vs negativul
 BIOMARKER_TEXTS = {
-    "Fluid":                ("There is fluid present in the retinal layers",                    "There is no fluid in the retinal layers"),
-    "SoftDrusenPED":        ("There is a soft drusen pigment epithelial detachment present",    "There is no pigment epithelial detachment present"),
-    "PRLayerDisruption":    ("There is disruption of the photoreceptor layer",                  "The photoreceptor layer is intact with no disruption"),
-    "GeographicAtrophy":    ("There is geographic atrophy present in the retina",               "There is no geographic atrophy in the retina"),
-    "SoftDrusen":           ("There are soft drusen deposits present",                          "There are no soft drusen deposits present"),
-    "ReticularDrusen":      ("There are reticular drusen deposits present",                     "There are no reticular drusen deposits present"),
-    "HyperfluorescentSpots":("There are hyperfluorescent spots present in the retina",          "There are no hyperfluorescent spots in the retina"),
-    "HardDrusen":           ("There are hard drusen deposits present",                          "There are no hard drusen deposits present"),
-    "ChoroidalFolds":       ("There are choroidal folds present",                               "There are no choroidal folds present"),
+    "Fluid": ("There is fluid present in the retinal layers", "There is no fluid in the retinal layers"),
+    "SoftDrusenPED": ("There is a soft drusen pigment epithelial detachment present",
+                      "There is no pigment epithelial detachment present"),
+    "PRLayerDisruption": ("There is disruption of the photoreceptor layer",
+                          "The photoreceptor layer is intact with no disruption"),
+    "GeographicAtrophy": ("There is geographic atrophy present in the retina",
+                          "There is no geographic atrophy in the retina"),
+    "SoftDrusen": ("There are soft drusen deposits present", "There are no soft drusen deposits present"),
+    "ReticularDrusen": ("There are reticular drusen deposits present",
+                        "There are no reticular drusen deposits present"),
+    "HyperfluorescentSpots": ("There are hyperfluorescent spots present in the retina",
+                              "There are no hyperfluorescent spots in the retina"),
+    "HardDrusen": ("There are hard drusen deposits present", "There are no hard drusen deposits present"),
+    "ChoroidalFolds": ("There are choroidal folds present", "There are no choroidal folds present"),
 }
 
 # Normalizare pentru matching robust din metadata (case, spatii, underscore)
@@ -290,10 +288,10 @@ def encode_ensemble(model: MedSigLIPMultiTask, processor: AutoProcessor, texts: 
 
 @torch.no_grad()
 def _run_disease_setup(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    class_matrix: torch.Tensor,
-    setup_name: str,
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        class_matrix: torch.Tensor,
+        setup_name: str,
 ) -> dict:
     """
     Ruleaza un setup de clasificare zero-shot.
@@ -331,9 +329,9 @@ def _run_disease_setup(
 
 @torch.no_grad()
 def evaluate_disease_zero_shot(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    processor: AutoProcessor,
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        processor: AutoProcessor,
 ) -> dict:
     """Ruleaza cele 4 setup-uri de clasificare zero-shot si afiseaza comparatia."""
     print("\n  DISEASE ZERO-SHOT — 4 setup-uri\n")
@@ -347,7 +345,8 @@ def evaluate_disease_zero_shot(
     print("  [B] Ensemble generic (3 variante)...")
     mat_b = torch.cat([encode_ensemble(model, processor, DISEASE_ENSEMBLE[c]) for c in CLASSES], dim=0)
     results["B_ensemble_generic"] = _run_disease_setup(model, loader, mat_b, "B_ensemble")
-    print(f"      Accuracy: {results['B_ensemble_generic']['accuracy']}% | F1: {results['B_ensemble_generic']['f1_macro']}")
+    print(
+        f"      Accuracy: {results['B_ensemble_generic']['accuracy']}% | F1: {results['B_ensemble_generic']['f1_macro']}")
 
     print("  [C] Structure + Pathology (un text per branch)...")
     mat_c = torch.cat([
@@ -365,7 +364,8 @@ def evaluate_disease_zero_shot(
         for c in CLASSES
     ], dim=0)
     results["D_struct_path_ensemble"] = _run_disease_setup(model, loader, mat_d, "D_struct_path_ens")
-    print(f"      Accuracy: {results['D_struct_path_ensemble']['accuracy']}% | F1: {results['D_struct_path_ensemble']['f1_macro']}")
+    print(
+        f"      Accuracy: {results['D_struct_path_ensemble']['accuracy']}% | F1: {results['D_struct_path_ensemble']['f1_macro']}")
 
     # Tabel comparativ
     print(f"\n  {'Setup':<35} {'Accuracy':>10} {'F1 Macro':>10}")
@@ -375,12 +375,13 @@ def evaluate_disease_zero_shot(
 
     return results
 
+
 # BIOMARKER GROUND TRUTH
 
 def build_biomarker_gt(
-    master_json: str,
-    image_paths: list[str],
-    doctor_only: bool = False,
+        master_json: str,
+        image_paths: list[str],
+        doctor_only: bool = False,
 ) -> dict:
     """
     Construieste ground truth binar per biomarker din metadata.
@@ -399,9 +400,9 @@ def build_biomarker_gt(
             continue
 
         present = {
-            _BM_NORMALIZE.get(les.get("class", "").lower().replace(" ", "").replace("_", ""))
-            for les in meta.get("lesions", [])
-        } - {None}
+                      _BM_NORMALIZE.get(les.get("class", "").lower().replace(" ", "").replace("_", ""))
+                      for les in meta.get("lesions", [])
+                  } - {None}
 
         gt[path] = {bm: int(bm in present) for bm in BIOMARKER_TEXTS}
 
@@ -415,18 +416,19 @@ def get_doctor_only_paths(master_json: str, image_paths: list[str]) -> set[str]:
     return {
         p for p in image_paths
         if meta_index.get(p, {}).get("has_bounding_boxes")
-        and meta_index.get(p, {}).get("bbox_source", "doctor") == "doctor"
+           and meta_index.get(p, {}).get("bbox_source", "doctor") == "doctor"
     }
+
 
 # BIOMARKER EVALUATION — helper comun pt ZS si trained
 
 def _eval_biomarker_predictions(
-    predicted: np.ndarray,
-    all_paths: list[str],
-    gt: dict,
-    bm_names: list[str | None],
-    label: str,
-    display_names: list[str] | None = None,
+        predicted: np.ndarray,
+        all_paths: list[str],
+        gt: dict,
+        bm_names: list[str | None],
+        label: str,
+        display_names: list[str] | None = None,
 ) -> dict:
     """
     Calculeaza F1/Acc/Precision/Recall per biomarker si macro F1.
@@ -463,7 +465,7 @@ def _eval_biomarker_predictions(
         rec = recall_score(gt_arr, pred_arr, zero_division=0)
 
         display = display_names[col_idx]
-        print(f"  {display:<25} {acc*100:>5.1f}% {f1:>6.3f} {prec:>6.3f} {rec:>6.3f} {n_pos:>5}")
+        print(f"  {display:<25} {acc * 100:>5.1f}% {f1:>6.3f} {prec:>6.3f} {rec:>6.3f} {n_pos:>5}")
 
         results_per_bm[display] = {
             "accuracy": round(acc * 100, 2), "f1": round(f1, 4),
@@ -476,23 +478,23 @@ def _eval_biomarker_predictions(
     if all_gt_flat:
         overall_acc = accuracy_score(all_gt_flat, all_pred_flat)
         overall_f1 = f1_score(all_gt_flat, all_pred_flat, zero_division=0)
-        f1s  = [v["f1"] for v in results_per_bm.values() if v["n_positive"] > 0]
-        macro_f1    = float(np.mean(f1s)) if f1s else 0.0
+        f1s = [v["f1"] for v in results_per_bm.values() if v["n_positive"] > 0]
+        macro_f1 = float(np.mean(f1s)) if f1s else 0.0
         print(f"\n  [{label}] Macro F1={macro_f1:.4f} | Overall F1={overall_f1:.4f} | Acc={overall_acc * 100:.2f}%")
 
     return {
-        "per_biomarker":    results_per_bm,
+        "per_biomarker": results_per_bm,
         "overall_accuracy": round(overall_acc * 100, 2) if overall_acc is not None else None,
-        "overall_f1":       round(overall_f1, 4) if overall_f1 is not None else None,
-        "macro_f1":         round(macro_f1, 4) if macro_f1 is not None else None,
+        "overall_f1": round(overall_f1, 4) if overall_f1 is not None else None,
+        "macro_f1": round(macro_f1, 4) if macro_f1 is not None else None,
     }
 
 
 @torch.no_grad()
 def _collect_image_embeddings(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    dataset: OCT5kDataset,
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        dataset: OCT5kDataset,
 ) -> tuple[torch.Tensor, list[str]]:
     """Ruleaza encoder vizual peste tot loader-ul si returneaza (embeddings, paths)."""
     all_embs, all_paths = [], []
@@ -507,16 +509,17 @@ def _collect_image_embeddings(
     _free_mem()
     return torch.cat(all_embs), all_paths
 
+
 # BIOMARKER ZERO-SHOT
 
 @torch.no_grad()
 def evaluate_biomarkers_zero_shot(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    dataset: OCT5kDataset,
-    gt: dict,
-    processor: AutoProcessor,
-    label: str = "Zero-shot",
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        dataset: OCT5kDataset,
+        gt: dict,
+        processor: AutoProcessor,
+        label: str = "Zero-shot",
 ) -> dict:
     """
     Clasificare zero-shot per biomarker prin compararea similaritatii
@@ -545,12 +548,12 @@ def evaluate_biomarkers_zero_shot(
 
 @torch.no_grad()
 def evaluate_biomarkers_trained(
-    bm_model: BiomarkerHeadsV5,
-    loader: DataLoader,
-    dataset: OCT5kDataset,
-    gt: dict,
-    thresholds: list[float],
-    label: str = "v5 trained",
+        bm_model: BiomarkerHeadsV5,
+        loader: DataLoader,
+        dataset: OCT5kDataset,
+        gt: dict,
+        thresholds: list[float],
+        label: str = "v5 trained",
 ) -> dict:
     """Evalueaza head-urile antrenate cu thresholds optimizate per biomarker."""
     print(f"\n  [TH] {label} ({sum(1 for p in dataset.df['image_path'] if p in gt)} imagini cu GT)...")
@@ -567,7 +570,7 @@ def evaluate_biomarkers_trained(
             all_paths.append(dataset.df.iloc[start + i]["image_path"])
 
     _free_mem()
-    probs_np  = torch.cat(all_probs).numpy()
+    probs_np = torch.cat(all_probs).numpy()
     predicted = np.stack([
         (probs_np[:, i] > thresholds[i]).astype(float)
         for i in range(len(BIOMARKERS_TRAINED))
@@ -575,6 +578,7 @@ def evaluate_biomarkers_trained(
 
     bm_names_mapped = [_TRAINED_TO_ZS.get(bm) for bm in BIOMARKERS_TRAINED]
     return _eval_biomarker_predictions(predicted, all_paths, gt, bm_names_mapped, label, BIOMARKERS_TRAINED)
+
 
 # DATA LOADING HELPERS
 
@@ -600,6 +604,7 @@ def _free_mem() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
+
 
 # MAIN
 
@@ -631,8 +636,8 @@ def main():
     bbox_paths_all = test_df[test_df["has_bbox"] == True]["image_path"].tolist()
     bbox_paths_doc = list(get_doctor_only_paths(cfg.master_json, bbox_paths_all))
 
-    ds_all,  loader_all,  tmp_all  = _make_bbox_loader(cfg.test_csv, bbox_paths_all, processor, "bbox_all")
-    ds_doc,  loader_doc,  tmp_doc  = _make_bbox_loader(cfg.test_csv, bbox_paths_doc, processor, "bbox_doc")
+    ds_all, loader_all, tmp_all = _make_bbox_loader(cfg.test_csv, bbox_paths_all, processor, "bbox_all")
+    ds_doc, loader_doc, tmp_doc = _make_bbox_loader(cfg.test_csv, bbox_paths_doc, processor, "bbox_doc")
 
     gt_all = build_biomarker_gt(cfg.master_json, bbox_paths_all, doctor_only=False)
     gt_doc = build_biomarker_gt(cfg.master_json, bbox_paths_doc, doctor_only=True)
@@ -647,12 +652,14 @@ def main():
     # Biomarker zero-shot + trained — ALL bbox
     print("\n  BIOMARKER EVAL — ALL BBOX (doctor + yolo)")
     zs_all = evaluate_biomarkers_zero_shot(model, loader_all, ds_all, gt_all, processor, "ZS all bbox")
-    trained_all = evaluate_biomarkers_trained(bm_model, loader_all, ds_all, gt_all, bm_thrs, "v5 all bbox") if bm_model else None
+    trained_all = evaluate_biomarkers_trained(bm_model, loader_all, ds_all, gt_all, bm_thrs,
+                                              "v5 all bbox") if bm_model else None
 
     # Biomarker zero-shot + trained — DOCTOR-ONLY
     print("\n  BIOMARKER EVAL — DOCTOR-ONLY")
     zs_doc = evaluate_biomarkers_zero_shot(model, loader_doc, ds_doc, gt_doc, processor, "ZS doctor-only")
-    trained_doc = evaluate_biomarkers_trained(bm_model, loader_doc, ds_doc, gt_doc, bm_thrs, "v5 doctor-only") if bm_model else None
+    trained_doc = evaluate_biomarkers_trained(bm_model, loader_doc, ds_doc, gt_doc, bm_thrs,
+                                              "v5 doctor-only") if bm_model else None
 
     # Stergem CSVurile temporare
     for tmp in [tmp_all, tmp_doc]:
@@ -663,8 +670,8 @@ def main():
     results = {
         "model": "MedSigLIP_v13",
         "disease_zero_shot": disease_results,
-        "biomarker_all_bbox": {"zero_shot": zs_all,  "trained_v5": trained_all},
-        "biomarker_doctor_only": {"zero_shot": zs_doc,  "trained_v5": trained_doc},
+        "biomarker_all_bbox": {"zero_shot": zs_all, "trained_v5": trained_all},
+        "biomarker_doctor_only": {"zero_shot": zs_doc, "trained_v5": trained_doc},
     }
     os.makedirs(os.path.dirname(cfg.out_json), exist_ok=True)
     with open(cfg.out_json, "w", encoding="utf-8") as f:

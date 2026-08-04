@@ -1,29 +1,19 @@
-"""
-train_v13.py — MedSigLIP v13
-LoRA + BBox Oversampling + lam_cls=1.0 + MedGemma 27B prompts
-
-Ablation history:
-  - v13 vs v12: prompturi MedGemma 27B in loc de 4B. Performanta identica (Score 80.1 vs 80.0).
-  - v12 vs v11: lam_cls crescut la 1.0 (de la 0.3) pt gradient mai puternic pe clasificare.
-  - v11:        BBox oversampling (weight=3.0) pt a forta modelul sa vada leziunile rare mai des.
-"""
-
 import gc
 import os
 import sys
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 import torch.nn as nn
-import wandb
 from torch.amp import autocast, GradScaler
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 from transformers import AutoProcessor
 
-# Previne fragmentarea memoriei video — activat inainte de orice import torch
+import wandb
+
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -34,12 +24,7 @@ from src.model.medsiglip import MedSigLIPMultiTask
 from src.utils.seed import set_seed
 
 
-
-# CONFIGURARE
-
-
 class Config:
-    # Cai catre date si model
     model_path = "models/medsiglip-448"
     splits_dir = "data/oct5k/splits_v3"
     split_json = "data/OCT5k/medgemma_prompts_split_v2_27b.json"
@@ -51,23 +36,23 @@ class Config:
     bs = 8
     accum = 8
     epochs = 35
-    warmup = 3    # epoci de warmup liniar inainte de cosine annealing
-    patience = 10    # cate epoci asteptam fara imbunatatire inainte de early stopping
+    warmup = 3  # epoci de warmup liniar inainte de cosine annealing
+    patience = 10  # cate epoci asteptam fara imbunatatire inainte de early stopping
     grad_clip = 1.0  # clip gradients pt stabilitate
-    min_delta = 0.001 # imbunatatire minima considerata progres
+    min_delta = 0.001  # imbunatatire minima considerata progres
 
     # Learning rates diferentiate pe grupuri de parametri
-    head_lr = 1e-4   # capetele de task (cls, sev)
-    fusion_lr = 1e-4   # CrossAttentionFusion — mai mic, e mai sensibil
-    lora_lr = 1.5e-4 # parametrii LoRA
-    wd = 0.01   # weight decay (nu se aplica pe bias/norm)
-    min_lr = 1e-7   # limita inferioara pt cosine annealing
+    head_lr = 1e-4  # capetele de task (cls, sev)
+    fusion_lr = 1e-4  # CrossAttentionFusion — mai mic, e mai sensibil
+    lora_lr = 1.5e-4  # parametrii LoRA
+    wd = 0.01  # weight decay (nu se aplica pe bias/norm)
+    min_lr = 1e-7  # limita inferioara pt cosine annealing
 
     # Ponderi loss multi-task
     # loss_total = loss_contrastiv + lam_sev * loss_severitate + lam_cls * loss_clasificare
-    lam_contrastiv = 2.0   # NOU — explicit weight pe contrastiv
-    lam_sev = 0.2          # redus
-    lam_cls = 0.3          # redus MULT (de la 1.0)
+    lam_contrastiv = 2.0  # explicit weight pe contrastiv
+    lam_sev = 0.2
+    lam_cls = 0.3
 
     # BBox oversampling — imaginile cu leziuni adnotate sunt trase de 3x mai des
     bbox_weight = 3.0
@@ -93,11 +78,6 @@ class Config:
 
 cfg = Config()
 os.makedirs(cfg.ckpt_dir, exist_ok=True)
-
-
-
-# DATE — loader cu oversampling pe imagini cu bbox
-
 
 def build_train_loader(processor: AutoProcessor) -> tuple[OCT5kDataset, DataLoader]:
     """
@@ -136,11 +116,6 @@ def build_train_loader(processor: AutoProcessor) -> tuple[OCT5kDataset, DataLoad
     )
     return ds, loader
 
-
-
-# OPTIMIZER — learning rates diferentiate pe grupuri
-
-
 def build_optimizer(model: MedSigLIPMultiTask) -> torch.optim.AdamW:
     """
     AdamW cu 3 grupuri de LR: LoRA > Fusion > Task heads.
@@ -148,9 +123,9 @@ def build_optimizer(model: MedSigLIPMultiTask) -> torch.optim.AdamW:
     (standard practice — regularizarea pe ele face mai mult rau decat bine).
     """
     # Initializam 6 liste: decay / no_decay pentru fiecare grup
-    lora_d,   lora_nd = [], []
+    lora_d, lora_nd = [], []
     fusion_d, fusion_nd = [], []
-    head_d,   head_nd = [], []
+    head_d, head_nd = [], []
 
     for name, param in model.named_parameters():
         if not param.requires_grad:
@@ -169,42 +144,37 @@ def build_optimizer(model: MedSigLIPMultiTask) -> torch.optim.AdamW:
         (nd_list if no_decay else d_list).append(param)
 
     param_groups = [
-        {"params": lora_d,   "lr": cfg.lora_lr,   "weight_decay": cfg.wd},
-        {"params": lora_nd,  "lr": cfg.lora_lr,   "weight_decay": 0.0},
-        {"params": fusion_d, "lr": cfg.fusion_lr,  "weight_decay": cfg.wd},
-        {"params": fusion_nd, "lr": cfg.fusion_lr,  "weight_decay": 0.0},
-        {"params": head_d,   "lr": cfg.head_lr,    "weight_decay": cfg.wd},
-        {"params": head_nd,  "lr": cfg.head_lr,    "weight_decay": 0.0},
+        {"params": lora_d, "lr": cfg.lora_lr, "weight_decay": cfg.wd},
+        {"params": lora_nd, "lr": cfg.lora_lr, "weight_decay": 0.0},
+        {"params": fusion_d, "lr": cfg.fusion_lr, "weight_decay": cfg.wd},
+        {"params": fusion_nd, "lr": cfg.fusion_lr, "weight_decay": 0.0},
+        {"params": head_d, "lr": cfg.head_lr, "weight_decay": cfg.wd},
+        {"params": head_nd, "lr": cfg.head_lr, "weight_decay": 0.0},
     ]
 
-    # Filtram grupurile goale (e.g. daca un grup nu are parametri)
+    # Filtram grupurile goale (ex. daca un grup nu are parametri)
     return torch.optim.AdamW([g for g in param_groups if g["params"]])
 
-
-
-# FORWARD + LOSS — functie comuna pt train si val (DRY)
-
-
 def compute_loss(
-    model: MedSigLIPMultiTask,
-    batch: dict,
-    contrastive_fn: SigLIPLoss,
-    cls_fn: nn.CrossEntropyLoss,
-    sev_fn: nn.SmoothL1Loss,
+        model: MedSigLIPMultiTask,
+        batch: dict,
+        contrastive_fn: SigLIPLoss,
+        cls_fn: nn.CrossEntropyLoss,
+        sev_fn: nn.SmoothL1Loss,
 ) -> tuple:
     """
     Forward pass complet + calcul loss multi-task.
-    Folosita identic in run_train si run_val — evita duplicarea a ~30 linii.
+    Folosita identic in run_train si run_val
 
     Returneaza: (loss_total, loss_c, loss_s, loss_cl, img_emb, fused_emb, sev_pred, cls_logits)
     """
     # Mutam totul pe GPU cu non_blocking=True pt transfer asincron
-    pv  = batch["pixel_values"].to(cfg.device, non_blocking=True)
-    ia  = batch["input_ids_a"].to(cfg.device, non_blocking=True)
-    ma  = batch["attention_mask_a"].to(cfg.device, non_blocking=True)
-    ib  = batch["input_ids_b"].to(cfg.device, non_blocking=True)
-    mb  = batch["attention_mask_b"].to(cfg.device, non_blocking=True)
-    labels   = batch["label"].to(cfg.device, non_blocking=True)
+    pv = batch["pixel_values"].to(cfg.device, non_blocking=True)
+    ia = batch["input_ids_a"].to(cfg.device, non_blocking=True)
+    ma = batch["attention_mask_a"].to(cfg.device, non_blocking=True)
+    ib = batch["input_ids_b"].to(cfg.device, non_blocking=True)
+    mb = batch["attention_mask_b"].to(cfg.device, non_blocking=True)
+    labels = batch["label"].to(cfg.device, non_blocking=True)
     severity = batch["severity"].to(cfg.device, non_blocking=True)
 
     # autocast face calculele in float16 unde e sigur => mai rapid, mai putina VRAM
@@ -216,33 +186,28 @@ def compute_loss(
         # Loss contrastiv calculat din 3 perspective text si mediat
         # => modelul invata sa alinieze imaginea cu promptul A, B, si combinatia lor
         loss_c = (
-            contrastive_fn(img_emb, emb_a, logit_scale)
-            + contrastive_fn(img_emb, emb_b, logit_scale)
-            + contrastive_fn(img_emb, fused_emb, logit_scale)
-        ) / 3
+                         contrastive_fn(img_emb, emb_a, logit_scale)
+                         + contrastive_fn(img_emb, emb_b, logit_scale)
+                         + contrastive_fn(img_emb, fused_emb, logit_scale)
+                 ) / 3
 
-        loss_s = sev_fn(sev_pred, severity)     # SmoothL1 — mai robust la outlieri decat MSE
-        loss_cl = cls_fn(cls_logits, labels)      # CrossEntropy pt clasificare 4 clase
+        loss_s = sev_fn(sev_pred, severity)  # SmoothL1 — mai robust la outlieri decat MSE
+        loss_cl = cls_fn(cls_logits, labels)  # CrossEntropy pt clasificare 4 clase
 
         # Ecuatia finala multi-task
         loss = cfg.lam_contrastiv * loss_c + cfg.lam_sev * loss_s + cfg.lam_cls * loss_cl
 
     return loss, loss_c, loss_s, loss_cl, img_emb, fused_emb, sev_pred, cls_logits
 
-
-
-# TRAINING LOOP
-
-
 def run_train(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    contrastive_fn: SigLIPLoss,
-    cls_fn: nn.CrossEntropyLoss,
-    sev_fn: nn.SmoothL1Loss,
-    optimizer: torch.optim.AdamW,
-    scaler: GradScaler,
-    epoch: int,
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        contrastive_fn: SigLIPLoss,
+        cls_fn: nn.CrossEntropyLoss,
+        sev_fn: nn.SmoothL1Loss,
+        optimizer: torch.optim.AdamW,
+        scaler: GradScaler,
+        epoch: int,
 ) -> dict:
     model.train()
     optimizer.zero_grad()
@@ -280,36 +245,31 @@ def run_train(
             cos_sim = (img_emb.detach() * fused_emb.detach()).sum(dim=-1).mean().item()
 
         totals["cos_sim"] = totals.get("cos_sim", 0.0) + cos_sim
-        totals["loss"]   += loss.item()
+        totals["loss"] += loss.item()
         totals["loss_c"] += loss_c.item()
         totals["loss_s"] += loss_s.item()
-        totals["loss_cl"]+= loss_cl.item()
-        totals["i2t"]    += i2t
-        totals["t2i"]    += t2i
+        totals["loss_cl"] += loss_cl.item()
+        totals["i2t"] += i2t
+        totals["t2i"] += t2i
         steps += 1
 
         pbar.set_postfix(
-            L =f"{totals['loss']    / steps:.3f}",
-            C =f"{totals['loss_c']  / steps:.3f}",
-            S =f"{totals['loss_s']  / steps:.3f}",
+            L=f"{totals['loss'] / steps:.3f}",
+            C=f"{totals['loss_c'] / steps:.3f}",
+            S=f"{totals['loss_s'] / steps:.3f}",
             CL=f"{totals['loss_cl'] / steps:.3f}",
         )
 
     _free_mem()
     return {k: v / steps for k, v in totals.items()}
 
-
-
-# VALIDARE LOOP
-
-
 @torch.no_grad()
 def run_val(
-    model: MedSigLIPMultiTask,
-    loader: DataLoader,
-    contrastive_fn: SigLIPLoss,
-    cls_fn: nn.CrossEntropyLoss,
-    sev_fn: nn.SmoothL1Loss,
+        model: MedSigLIPMultiTask,
+        loader: DataLoader,
+        contrastive_fn: SigLIPLoss,
+        cls_fn: nn.CrossEntropyLoss,
+        sev_fn: nn.SmoothL1Loss,
 ) -> dict:
     model.eval()
 
@@ -322,21 +282,16 @@ def run_val(
         )
         i2t, t2i = contrastive_accuracy(img_emb, fused_emb)
 
-        totals["loss"]   += loss.item()
+        totals["loss"] += loss.item()
         totals["loss_c"] += loss_c.item()
         totals["loss_s"] += loss_s.item()
-        totals["loss_cl"]+= loss_cl.item()
-        totals["i2t"]    += i2t
-        totals["t2i"]    += t2i
+        totals["loss_cl"] += loss_cl.item()
+        totals["i2t"] += i2t
+        totals["t2i"] += t2i
         steps += 1
 
     _free_mem()
     return {k: v / steps for k, v in totals.items()}
-
-
-
-# EVALUARE METRICE COMPLETE (Recall@K, Cls Acc, SevMAE)
-
 
 @torch.no_grad()
 def evaluate(model: MedSigLIPMultiTask, loader: DataLoader) -> dict:
@@ -403,18 +358,13 @@ def compute_score(metrics: dict) -> float:
     avg_r1 = (metrics["I2T_R@1"] + metrics["T2I_R@1"]) / 2
     sev_acc = max(0.0, 100.0 - metrics["sev_mae"])  # convertim MAE in "acuratete"
     return (
-        cfg.score_w_retrieval * avg_r1
-        + cfg.score_w_cls     * metrics["cls_acc"]
-        + cfg.score_w_sev     * sev_acc
+            cfg.score_w_retrieval * avg_r1
+            + cfg.score_w_cls * metrics["cls_acc"]
+            + cfg.score_w_sev * sev_acc
     )
 
-
-
-# CHECKPOINTING
-
-
 def _build_checkpoint(
-    model, optimizer, scheduler, scaler, epoch, best_score, wait, history, n_classes
+        model, optimizer, scheduler, scaler, epoch, best_score, wait, history, n_classes
 ) -> dict:
     return {
         "epoch": epoch, "model": model.state_dict(),
@@ -438,11 +388,6 @@ def load_checkpoint(path, model, optimizer, scheduler, scaler, history) -> tuple
     history.update(ckpt["hist"])
     print(f"  Resumed from epoch {ckpt['epoch'] + 1}, best: {ckpt['best_score']:.1f}")
     return ckpt["epoch"] + 1, ckpt["best_score"], ckpt["wait"]
-
-
-
-# HISTORY & PLOTTING
-
 
 HISTORY_KEYS = [
     "train_loss", "val_loss", "train_loss_c", "train_loss_s", "train_loss_cl",
@@ -478,18 +423,19 @@ def save_plots(history: dict) -> None:
         for key, label in keys_labels:
             ax.plot(ep, history[key], label=label, marker="o", ms=2)
         ax.set(title=title, xlabel="Epoch", ylabel=ylabel)
-        ax.legend(); ax.grid(alpha=0.3)
+        ax.legend();
+        ax.grid(alpha=0.3)
 
     _plot(axes[0, 0], [("train_loss", "Train"), ("val_loss", "Val")], "Total Loss")
     _plot(axes[0, 1], [
-        ("train_loss_c",  "Contrastive"),
-        ("train_loss_s",  "Severity"),
+        ("train_loss_c", "Contrastive"),
+        ("train_loss_s", "Severity"),
         ("train_loss_cl", "Classification"),
     ], "Train Loss Breakdown")
     _plot(axes[0, 2], [("I2T_R@1", "R@1"), ("I2T_R@5", "R@5"), ("I2T_R@10", "R@10")], "I2T Retrieval", "%")
-    _plot(axes[1, 0], [("cls_acc", "Acc")],        "Classification Accuracy", "%")
-    _plot(axes[1, 1], [("sev_mae", "MAE")],         "Severity MAE (%)")
-    _plot(axes[1, 2], [("logit_scale", "Scale")],   "Logit Scale")
+    _plot(axes[1, 0], [("cls_acc", "Acc")], "Classification Accuracy", "%")
+    _plot(axes[1, 1], [("sev_mae", "MAE")], "Severity MAE (%)")
+    _plot(axes[1, 2], [("logit_scale", "Scale")], "Logit Scale")
 
     plt.suptitle(
         f"MedSigLIP v13 | LoRA r=16 | lam_cls={cfg.lam_cls} | bbox_weight={cfg.bbox_weight}",
@@ -499,29 +445,17 @@ def save_plots(history: dict) -> None:
     plt.savefig(f"{cfg.save_dir}/training_curves.png", dpi=150)
     plt.close()
 
-
-
-# UTILITARE
-
-
 def _free_mem() -> None:
     """Elibereaza cache VRAM si ruleaza GC — chemat dupa fiecare epoca."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
 
-
-
-# MAIN
-
-
 def main():
-    print("=" * 70)
-    print("  MEDSIGLIP v13 — LoRA + BBox Oversampling + lam_cls=1.0 + 27B prompts")
+    print("  MEDSIGLIP v15 — LoRA + BBox Oversampling + lam_cls=1.0 + 27B prompts")
     print(f"  split_json   = {cfg.split_json}")
     print(f"  batch efectiv = {cfg.batch_size} x {cfg.accum} = {cfg.effective_batch}")
     print(f"  lam_cls={cfg.lam_cls} | lam_sev={cfg.lam_sev} | bbox_weight={cfg.bbox_weight}")
-    print("=" * 70)
 
     set_seed()
 
@@ -547,7 +481,6 @@ def main():
     if val_loader is None:
         raise RuntimeError("Val loader lipsa — verifica splits_dir in Config.")
 
-    # Modelul vine din src/model/medsiglip.py — nu mai e definit aici
     model = MedSigLIPMultiTask(cfg.model_path, n_classes=train_ds.n_classes).to(cfg.device)
 
     contrastive_fn = SigLIPLoss()
@@ -611,7 +544,7 @@ def main():
         if score > best_score + cfg.min_delta:
             best_score = score
             wait = 0
-            print(f"  ★ New best: {best_score:.1f}")
+            print(f"   New best: {best_score:.1f}")
             save_checkpoint(ckpt, "best.pth")
         else:
             wait += 1
@@ -625,14 +558,12 @@ def main():
 
     # Salvari finale
     os.makedirs("checkpoints", exist_ok=True)
-    torch.save(model.state_dict(), "checkpoints/medsiglip_v13_final.pth")
+    torch.save(model.state_dict(), "checkpoints/medsiglip_v15_final.pth")
     pd.DataFrame(history).to_csv(f"{cfg.save_dir}/training_history.csv", index=False)
     save_plots(history)
     wandb.finish()
 
-    print("=" * 70)
     print(f"  DONE! Best Score: {best_score:.1f}")
-    print("=" * 70)
 
 
 if __name__ == "__main__":

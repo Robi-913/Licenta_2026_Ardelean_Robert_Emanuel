@@ -1,29 +1,23 @@
+import hashlib
+import json
 import os
 import sys
-import json
-import hashlib
-from pathlib import Path
 from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# Adaugam folderul parinte in sistem pentru a putea importa pachete custom (ex: src.utils.seed)
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.utils.seed import set_seed, SEED
 
 
-# ---------- config ----------
-
 class Config:
-    # Setam toate caile si constantele intr-un singur loc pt a fi usor de modificat
     oct5k_root = "data/OCT5k"
 
     bb_csv = "data/OCT5k/Detection/all_bounding_boxes.csv"
     classes_csv = "data/OCT5k/Detection/all_classes.csv"
 
-    # Directoarele unde cautam pozele
     img_dirs = [
         "data/OCT5k/Images/Images_Automatic",
         "data/OCT5k/Images/Images_Manual",
@@ -41,7 +35,6 @@ class Config:
 
     yolo_bboxes_json = "data/oct5k/yolo_bboxes.json"
 
-    # Marimea standard la care vor fi raportate coordonatele
     img_size = 512
 
     # Procentajele pt split-ul datelor
@@ -74,8 +67,6 @@ class Config:
 cfg = Config()
 
 
-# ---------- helpers ----------
-
 def get_disease(path):
     # Extragem tipul bolii din numele primului folder (ex: 'DME/Image.png' -> 'DME')
     normalized = path.replace("\\", "/")
@@ -100,7 +91,6 @@ def get_patient_session(path):
     # Tip 3: structura flat (ex: DRUSEN/DRUSEN-9884539-8.png)
     if len(parts) == 2:
         fname = parts[-1].replace(".png", "").replace(".jpeg", "")
-        # Eliminam ultimul dash si numarul pt a obtine ID-ul pacientului
         patient_id = "-".join(fname.split("-")[:-1])
         return f"{parts[0]}/{patient_id}" if patient_id else f"{parts[0]}/{fname}"
 
@@ -167,8 +157,6 @@ def retinal_zone(cx_norm):
         return "central-foveal"
     return "temporal"
 
-
-# ---------- boundary parsing ----------
 
 def parse_boundaries(csv_path):
     # Citim limitele straturilor. Daca lipseste ceva sau fisierul e corupt, anulam (return None)
@@ -237,8 +225,6 @@ def parse_boundaries(csv_path):
     }
 
 
-# ---------- bbox + layer correlation ----------
-
 def correlate_bbox_layers(bbox, bounds):
     # Estimeaza in ce strat se afla centrul cutiei (bounding box-ului) detectate
     if bounds is None:
@@ -293,9 +279,7 @@ def correlate_bbox_layers(bbox, bounds):
     return {"affected_layer": "unknown", "depth_info": "could not determine"}
 
 
-# --- Functie ajutatoare aplicand DRY (Don't Repeat Yourself) ---
 def _build_lesion_entry(xmin, ymin, xmax, ymax, cls_name, bounds, conf=None):
-    # Aceasta metoda unifica logica repetitiva care era si pt Doctor si pt YOLO
     xmin_n = round(xmin / cfg.img_size, 4)
     ymin_n = round(ymin / cfg.img_size, 4)
     xmax_n = round(xmax / cfg.img_size, 4)
@@ -328,7 +312,7 @@ def _build_lesion_entry(xmin, ymin, xmax, ymax, cls_name, bounds, conf=None):
 
 
 def process_bboxes(img_path, bb_group, bounds):
-    # Procesam datele marcate manual de doctori apeland functia de mai sus pt a pastra codul curat (KISS)
+    # Procesam datele marcate manual de doctori
     return [
         _build_lesion_entry(
             int(row["xmin"]), int(row["ymin"]),
@@ -340,7 +324,7 @@ def process_bboxes(img_path, bb_group, bounds):
 
 
 def process_yolo_bboxes(yolo_lesions, bounds):
-    # Procesam la fel si detectiile AI-ului (YOLO)
+    # Procesam la fel si detectiile YOLO
     return [
         _build_lesion_entry(
             int(les["bbox_abs"][0]), int(les["bbox_abs"][1]),
@@ -350,8 +334,6 @@ def process_yolo_bboxes(yolo_lesions, bounds):
         for les in yolo_lesions
     ]
 
-
-# ---------- image collection ----------
 
 def collect_images():
     # Parcurge folderele fizice si returneaza un dictionar cu pozele gasite
@@ -382,13 +364,9 @@ def collect_images():
     return found
 
 
-# ---------- build metadata ----------
-
 def build_metadata():
     # Construim fisierul urias de metadate ce centralizeaza absolut tot per imagine
-    print(f"{'=' * 70}")
     print("  STEP 1: BUILD STRUCTURED METADATA FOR MEDGEMMA")
-    print(f"{'=' * 70}")
 
     os.makedirs(cfg.meta_dir, exist_ok=True)
     os.makedirs(cfg.splits_dir, exist_ok=True)
@@ -512,21 +490,14 @@ def build_metadata():
     return all_meta
 
 
-# ---------- splits v3 - PATIENT-LEVEL ----------
-
 def make_splits(all_meta):
     """
     v3: Split la nivel de pacient/sesiune, nu la nivel de imagine.
 
-    Problema v1/v2: split random pe imagini -> acelasi pacient apare
-    in train SI test -> data leakage -> Aceste retele devin artificial bune (memorare vs generalizare).
-
-    Fix: grupam imaginile dupa patient_session, facem split pe grupuri,
+    Grupam imaginile dupa patient_session, facem split pe grupuri,
     apoi toate imaginile din grup merg in acelasi split.
     """
-    print(f"\n{'=' * 70}")
     print("  GENERATING TRAIN / VAL / TEST SPLITS (v3 - PATIENT-LEVEL)")
-    print(f"{'=' * 70}")
 
     # Selectam doar coloanele esentiale pt raportul final de split
     rows = [
@@ -560,7 +531,7 @@ def make_splits(all_meta):
     print(f"  Total pacienti/sesiuni: {n_patients}")
     print(f"  Medie imagini/pacient:  {len(df) / n_patients:.1f}")
 
-    # Facem primul split (Train vs Restul) pastrand proportia claselor egala (stratify)
+    # Facem primul split (Train vs Restul) pastrand proportia claselor egala
     train_pat, temp_pat = train_test_split(
         patient_df,
         test_size=cfg.val_ratio + cfg.test_ratio,
@@ -582,7 +553,7 @@ def make_splits(all_meta):
     val_sessions = set(val_pat["patient_session"])
     test_sessions = set(test_pat["patient_session"])
 
-    # Daca exista un singur pacient si in train si in val, arunca eroare instant! (Safety check)
+    # Daca exista un singur pacient si in train si in val, arunca eroare instant
     assert len(train_sessions & val_sessions) == 0, "OVERLAP train/val!"
     assert len(train_sessions & test_sessions) == 0, "OVERLAP train/test!"
     assert len(val_sessions & test_sessions) == 0, "OVERLAP val/test!"
@@ -605,7 +576,6 @@ def make_splits(all_meta):
     # Printeaza frumos la final tabelul
     header = f"  {'Split':<8} {'Img':>6} {'Pat':>5} {'AMD':>6} {'DME':>6} {'DRUSEN':>7} {'NORMAL':>7} {'doc':>6} {'yolo':>6} {'none':>6}"
     print(f"\n{header}")
-    print(f"  {'─' * 72}")
 
     for name, sdf, pat_df in [
         ("train", train_df, train_pat),
@@ -631,8 +601,6 @@ def make_splits(all_meta):
     return train_df, val_df, test_df
 
 
-# ---------- main ----------
-
 def main():
     set_seed()
 
@@ -642,20 +610,16 @@ def main():
     # Demo: Printeaza json-ul unui exemplu din consola pt a vedea exact ce structura are la final
     examples = [m for m in all_meta if m["has_bounding_boxes"] and m["has_boundaries"]]
     if examples:
-        print(f"\n{'=' * 70}")
         print("  EXAMPLE JSON (first image with bbox + boundaries):")
-        print(f"{'=' * 70}")
         ex = examples[0]
         show = {k: v for k, v in ex.items() if k != "boundaries"}
         show["boundaries"] = "... (see individual JSON)" if ex["boundaries"] else None
         print(json.dumps(show, indent=2, ensure_ascii=False)[:2000])
 
-    print(f"\n{'=' * 70}")
     print("  STEP 1 COMPLETE!")
     print(f"  Metadata:  {cfg.meta_dir}/")
     print(f"  Splits:    {cfg.splits_dir}/")
     print(f"  Master:    {cfg.meta_dir}/_master.json")
-    print(f"{'=' * 70}")
 
 
 if __name__ == "__main__":

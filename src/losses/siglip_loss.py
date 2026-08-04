@@ -12,7 +12,6 @@ class SigLIPLoss(nn.Module):
         # nu facem media pt ca avem nevoie de lossul individual pt fiecare pereche imagine-text din batch
 
     def forward(self, img_emb, txt_emb, logit_scale):
-
         """
         :param img_emb: embeddingul imaginei (vector de dimensiune fixa care reprezinta imaginea)
         :param txt_emb: embeddingul textului (vector de dimensiune fixa care reprezinta textul)
@@ -23,9 +22,9 @@ class SigLIPLoss(nn.Module):
         :return: loss.mean
         """
 
-        batch_size = img_emb.shape[0] # sizeul batchului
+        batch_size = img_emb.shape[0]  # sizeul batchului
 
-        similarity = img_emb @ txt_emb.T # @ -> dot product pt a crea matricea de similaritate
+        similarity = img_emb @ txt_emb.T  # @ -> dot product pt a crea matricea de similaritate
 
         # ex:
         #     img_emb (2 imagini, 3 numere fiecare):
@@ -40,7 +39,6 @@ class SigLIPLoss(nn.Module):
         #     imagine_0 [0.27   0.34]
         #     imagine_1 [0.22   0.64]
 
-
         scaled = similarity * logit_scale.exp()
         # fortam modelul sa amplifice diferentele valorile
         # ex:
@@ -49,7 +47,7 @@ class SigLIPLoss(nn.Module):
         #     imagine_0 [2.70   3.40]
         #     imagine_1 [2.20   6.40]
 
-        target = torch.eye(batch_size, device=img_emb.device) # cream matricea identitate
+        target = torch.eye(batch_size, device=img_emb.device)  # cream matricea identitate
 
         loss = self.bce(scaled, target)
         # scaled:                     target:
@@ -61,9 +59,7 @@ class SigLIPLoss(nn.Module):
         # pozitia [1,0]: scor 2.2, tinta 0 -> e maricel pt ceva gresit, deci loss mediu
         # pozitia [1,1]: scor 6.4, tinta 1 -> potrivire excelenta, deci loss foarte mic
 
-        return loss.mean() #calcula media lossurilor
-
-
+        return loss.mean()  # calcula media lossurilor
 
 
 def contrastive_accuracy(img_emb, txt_emb):

@@ -1,12 +1,9 @@
+import gc
 import os
 import sys
-import gc
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -28,12 +25,10 @@ from mirage_hf import MIRAGEWrapper
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
-from src.datasets.oct5k_medsiglip import OCT5kDataset, collate_oct5k
+from src.datasets.oct5k_medsiglip import OCT5kDataset
 from src.losses.siglip_loss import SigLIPLoss, contrastive_accuracy
 from src.utils.seed import set_seed
 
-
-# ---------- MIRAGE HuggingFace loader ----------
 
 class MIRAGEhf(MIRAGEWrapper, PyTorchModelHubMixin):
     def __init__(self, input_size=512, patch_size=32, modalities="bscan", size="base"):
@@ -44,8 +39,6 @@ class MIRAGEhf(MIRAGEWrapper, PyTorchModelHubMixin):
             size=size,
         )
 
-
-# ---------- config ----------
 
 class Config:
     # MIRAGE image encoder
@@ -71,7 +64,7 @@ class Config:
     grad_clip = 1.0
     min_delta = 0.001
 
-    proj_lr = 5e-4     # projection layer (random init, needs higher lr)
+    proj_lr = 5e-4  # projection layer (random init, needs higher lr)
     head_lr = 1e-4
     fusion_lr = 5e-5
     wd = 0.01
@@ -94,9 +87,6 @@ class Config:
 cfg = Config()
 os.makedirs(f"{cfg.save_dir}/ckpts", exist_ok=True)
 
-
-# ---------- MIRAGE preprocessing ----------
-
 mirage_transform_train = T.Compose([
     T.Resize((cfg.mirage_input_size, cfg.mirage_input_size)),
     T.Grayscale(num_output_channels=1),
@@ -110,8 +100,6 @@ mirage_transform_eval = T.Compose([
     T.ToTensor(),
 ])
 
-
-# ---------- dataset (MIRAGE images + MedSigLIP tokens) ----------
 
 class OCT5kMIRAGE(OCT5kDataset):
     """
@@ -145,7 +133,7 @@ class OCT5kMIRAGE(OCT5kDataset):
 
         # MIRAGE transform (resize 512, grayscale, to_tensor)
         # flip e inclus in transform pt train
-        pixels = self.mirage_transform(img)   # [1, 512, 512]
+        pixels = self.mirage_transform(img)  # [1, 512, 512]
 
         # text tokenizat cu MedSigLIP
         pair = self.prompts[img_path]
@@ -155,7 +143,7 @@ class OCT5kMIRAGE(OCT5kDataset):
         sev = self.sev[img_path] / 100.0
 
         return {
-            "pixel_values": pixels,          # [1, 512, 512] pt MIRAGE
+            "pixel_values": pixels,  # [1, 512, 512] pt MIRAGE
             "input_ids_a": ids_a,
             "attention_mask_a": mask_a,
             "input_ids_b": ids_b,
@@ -176,8 +164,6 @@ def collate_mirage(batch):
         "severity": torch.stack([b["severity"] for b in batch]),
     }
 
-
-# ---------- model ----------
 
 class CrossAttentionFusion(nn.Module):
     def __init__(self, dim, heads=4, dropout=0.1):
@@ -310,8 +296,8 @@ class MIRAGEMultiTask(nn.Module):
     def forward(self, pixel_values, ids_a, mask_a, ids_b, mask_b):
         # image: MIRAGE features (768) -> projected (1152)
         mirage_feat = self.encode_image(pixel_values)  # [B, 768]
-        img_proj = self.img_proj(mirage_feat)            # [B, 1152]
-        img_emb = F.normalize(img_proj, p=2, dim=-1)    # normalizat pt contrastive
+        img_proj = self.img_proj(mirage_feat)  # [B, 1152]
+        img_emb = F.normalize(img_proj, p=2, dim=-1)  # normalizat pt contrastive
 
         # text: MedSigLIP (inghetat)
         ea = self.encode_text(ids_a, mask_a)
@@ -324,8 +310,6 @@ class MIRAGEMultiTask(nn.Module):
 
         return img_emb, ea, eb, merged, self.logit_scale, sev, cls
 
-
-# ---------- data loaders ----------
 
 def make_train_loader(proc):
     train_csv = f"{cfg.splits_dir}/train.csv"
@@ -369,8 +353,6 @@ def make_eval_loader(proc, split):
     return ds, dl
 
 
-# ---------- optimizer ----------
-
 def make_optimizer(model):
     lora_params, lora_nd = [], []
     proj_params, proj_nd = [], []
@@ -395,14 +377,14 @@ def make_optimizer(model):
             target_d.append(p)
 
     groups = [
-        {"params": lora_params,   "lr": 1e-4,         "weight_decay": cfg.wd, "name": "mirage_lora"},
-        {"params": lora_nd,       "lr": 1e-4,         "weight_decay": 0.0,    "name": "mirage_lora_nd"},
-        {"params": proj_params,   "lr": cfg.proj_lr,   "weight_decay": cfg.wd, "name": "projection"},
-        {"params": proj_nd,       "lr": cfg.proj_lr,   "weight_decay": 0.0,    "name": "projection_nd"},
-        {"params": fusion_params, "lr": cfg.fusion_lr,  "weight_decay": cfg.wd, "name": "fusion"},
-        {"params": fusion_nd,     "lr": cfg.fusion_lr,  "weight_decay": 0.0,    "name": "fusion_nd"},
-        {"params": head_params,   "lr": cfg.head_lr,    "weight_decay": cfg.wd, "name": "heads"},
-        {"params": head_nd,       "lr": cfg.head_lr,    "weight_decay": 0.0,    "name": "heads_nd"},
+        {"params": lora_params, "lr": 1e-4, "weight_decay": cfg.wd, "name": "mirage_lora"},
+        {"params": lora_nd, "lr": 1e-4, "weight_decay": 0.0, "name": "mirage_lora_nd"},
+        {"params": proj_params, "lr": cfg.proj_lr, "weight_decay": cfg.wd, "name": "projection"},
+        {"params": proj_nd, "lr": cfg.proj_lr, "weight_decay": 0.0, "name": "projection_nd"},
+        {"params": fusion_params, "lr": cfg.fusion_lr, "weight_decay": cfg.wd, "name": "fusion"},
+        {"params": fusion_nd, "lr": cfg.fusion_lr, "weight_decay": 0.0, "name": "fusion_nd"},
+        {"params": head_params, "lr": cfg.head_lr, "weight_decay": cfg.wd, "name": "heads"},
+        {"params": head_nd, "lr": cfg.head_lr, "weight_decay": 0.0, "name": "heads_nd"},
     ]
     groups = [g for g in groups if g["params"]]
 
@@ -414,15 +396,11 @@ def make_optimizer(model):
     return torch.optim.AdamW(groups)
 
 
-# ---------- memory ----------
-
 def clear_mem():
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
 
-
-# ---------- eval ----------
 
 @torch.no_grad()
 def eval_all(model, loader):
@@ -473,8 +451,6 @@ def eval_all(model, loader):
 
     return out
 
-
-# ---------- train ----------
 
 def run_train(model, loader, c_loss, opt, scaler, ep):
     model.train()
@@ -547,8 +523,6 @@ def run_train(model, loader, c_loss, opt, scaler, ep):
     }
 
 
-# ---------- val ----------
-
 @torch.no_grad()
 def run_val(model, loader, c_loss):
     model.eval()
@@ -593,8 +567,6 @@ def run_val(model, loader, c_loss):
         "i2t": sum_i2t / steps, "t2i": sum_t2i / steps,
     }
 
-
-# ---------- main ----------
 
 def main():
     print(f"{'=' * 70}")
@@ -712,7 +684,7 @@ def main():
         if score > best + cfg.min_delta:
             best = score
             wait = 0
-            print(f"  ★ Best: {best:.1f}")
+            print(f"   Best: {best:.1f}")
             torch.save(ckpt, f"{cfg.save_dir}/ckpts/best.pth")
         else:
             wait += 1

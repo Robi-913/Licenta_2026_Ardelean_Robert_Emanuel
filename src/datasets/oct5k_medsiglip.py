@@ -23,7 +23,6 @@ class OCT5kDataset(Dataset):
         self.processor = processor
         self.mode = mode
 
-        # Setam folderele default unde vom cauta pozele, in caz ca nu primim o lista specifica
         self.img_dirs = img_dirs or [
             "data/OCT5k/Images/Images_Automatic",
             "data/OCT5k/Images/Images_Manual",
@@ -40,21 +39,12 @@ class OCT5kDataset(Dataset):
         self.prompts = {}
         # Verificam formatul fisierului JSON ca sa suportam atat versiuni vechi cat si noi
         if isinstance(raw_splits, dict):
-            # Format nou (v2): structura este tip dictionar (ex: {"poza.jpg": {"a": "text", "b": "text"}})
+            # Structura este tip dictionar (ex: {"poza.jpg": {"a": "text", "b": "text"}})
             for path, entry in raw_splits.items():
                 a = entry.get("a", "")
                 b = entry.get("b", "")
                 if a and b:
                     self.prompts[path] = {"a": a, "b": b}
-
-        elif isinstance(raw_splits, list):
-            # Format vechi (v1): structura este o lista de dictionare
-            for entry in raw_splits:
-                if entry.get("split_valid") is True:
-                    self.prompts[entry["image_path"]] = {
-                        "a": entry.get("a", entry.get("prompt_a", "")),
-                        "b": entry.get("b", entry.get("prompt_b", "")),
-                    }
 
         # 2. Incarcam JSON-ul cu scorurile de severitate ale bolii
         with open(severity_json, "r", encoding="utf-8") as f:
@@ -65,7 +55,6 @@ class OCT5kDataset(Dataset):
             pct = entry.get("severity_percent")
             # Adaugam in dictionar doar intrarile marcate ca valide si care au efectiv un procentaj
             if entry.get("severity_valid") is True and pct is not None:
-                # Inlocuim slash-urile cu backslash pt uniformitate (Windows/Linux)
                 path = entry["image_path"].replace("/", "\\")
                 self.sev[path] = pct
 
@@ -77,7 +66,7 @@ class OCT5kDataset(Dataset):
         usable = set(self.prompts.keys()) & set(self.sev.keys())
         self.df = self.df[self.df["image_path"].isin(usable)].reset_index(drop=True)
 
-        # Extragem si sortam clasele unice de boala (ex: ['CNV', 'DME', 'NORMAL'])
+        # Extragem si sortam clasele unice de boala (ex: ['DME', 'NORMAL'])
         self.classes = sorted(self.df["disease"].unique())
         self.lbl_map = {name: i for i, name in enumerate(self.classes)}
         self.n_classes = len(self.classes)
